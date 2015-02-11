@@ -13,7 +13,7 @@ def active_experiments_for_project(project)
 end
 
 def get_experiment(experiment_name)
-  PlanOut.const_get(p)
+  PlanOut.const_get(experiment_name)
 end
 
 get '/active_experiments' do
@@ -28,10 +28,12 @@ end
 
 get '/experiment/:experiment_name' do
   content_type :json
+
+  experiment_params = params.inject({}){|h,(k,v)| h[k.to_sym] = v; h}
   experiment = get_experiment(params[:experiment_name])
 
   if experiment
-    my_exp = experiment.new(params)
+    my_exp = experiment.new(**experiment_params)
     my_exp.get_params.to_json
   else
     status 404
