@@ -1,11 +1,6 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    bson (1.12.0)
-    mongo (1.12.0)
-      bson (= 1.12.0)
-    mongodb (2.1.0)
-      mongo (~> 1.5)
     planout (0.1.1)
     rack (1.6.0)
     rack-protection (1.5.3)
@@ -20,6 +15,5 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  mongodb
   planout
   sinatra
