@@ -7,6 +7,7 @@ ENV DEBIAN_FRONTEND noninteractive
 ADD Gemfile ./
 ADD Gemfile.lock ./
 
+RUN apt-get install git
 RUN apt-get update && apt-get -y upgrade && \
     bundle install
 
