@@ -1,4 +1,4 @@
 source 'https://rubygems.org'
 
 gem 'planout'
-gem 'sinatra'
+gem 'sinatra', git: 'http://github.com/sinatra/sinatra.git'
