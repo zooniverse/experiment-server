@@ -16,6 +16,10 @@ def get_experiment(experiment_name)
   PlanOut.const_get(experiment_name)
 end
 
+options '/*' do
+  response["Access-Control-Allow-Origin"] = "*"
+end
+
 get '/active_experiments' do
   content_type :json
 
@@ -28,7 +32,9 @@ end
 
 get '/experiment/:experiment_name' do
   content_type :json
-
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   experiment_params = params.inject({}){|h,(k,v)| h[k.to_sym] = v; h}
   experiment = get_experiment(params[:experiment_name])
 
