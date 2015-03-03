@@ -16,10 +16,6 @@ def get_experiment(experiment_name)
   PlanOut.const_get(experiment_name)
 end
 
-options '/*' do
-  response["Access-Control-Allow-Origin"] = "*"
-end
-
 get '/active_experiments' do
   content_type :json
 
