@@ -1,7 +1,7 @@
 require 'plan_out'
 
 module PlanOut
-  class BasicExperiment < PlanOut::SimpleExperiment
+  class BasicExperiment < SimpleExperiment
     def setup
 
     end
@@ -25,7 +25,6 @@ module PlanOut
         unit: pageid,
         salt:'x'
       })
-
 
       params[:prompt] = UniformChoice.new({
         choices: ["If you vote I will give you a puppy", "If you vote I will give you a kitten", 'If you vote I will stab your face'],
