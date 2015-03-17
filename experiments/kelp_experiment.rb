@@ -1,7 +1,7 @@
 require 'plan_out'
 
 module PlanOut
-  class KelpExperiment < SimpleExperiment
+  class KelpExperiment < PlanOut::SimpleExperiment
     def setup
 
     end
@@ -12,11 +12,10 @@ module PlanOut
 
     def assign(params, **inputs)
       userid = inputs[:userid]
-      pageid = inputs[:pageid]
 
       params[:button_color] = UniformChoice.new({
         choices: ['ff0000', '00ff00'],
-        unit: pageid
+        unit: userid
       })
 
       params[:goals] = UniformChoice.new({
