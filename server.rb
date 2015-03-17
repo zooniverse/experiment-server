@@ -1,7 +1,7 @@
 require 'sinatra'
 require 'json'
+require_relative 'environment'
 
-Dir[File.dirname(__FILE__) + '/experiments/*.rb'].each {|file| require file }
 
 def active_experiments
   experiments = PlanOut.constants.collect{|experiment| experiment.to_s}.select{|experiment_name| experiment_name.include? "Experiment" }
@@ -44,4 +44,40 @@ end
 
 post '/experiment/:experiment_name/log/:log_type' do
   get_experiment(params[:experiment_name]).log_event(params[:log_type],params-[:log_type])
+end
+
+###### Intervention API
+
+get '/users/:user_id/interventions' do
+  content_type :json
+  results = Intervention.where( state: "active", user_id: params[:user_id])
+  if params[:project]
+    results = results.where(project_name: params[:project])
+  end
+  results.all.to_json
+end
+
+post '/users/:user_id/interventions' do
+  content_type :json
+  intervention  = Intervention.create({user_id:               params["user_id"],
+                                       project:               params["project"],
+                                       intervention_type:     params["intervention_type"],
+                                       text_message:          params["text_message"],
+                                       cohort_id:             params["cohort_id"],
+                                       experiment_name:       params["experiment_name"],
+                                       time_duration:         params["time_duration"],
+                                       presentation_duration: params["presentation_duration"],
+                                       intervention_channel:  params["intervention_channel"],
+                                       take_action:           params["take_action"],
+                                       details:               params["details"]
+                                       })
+  status 500 unless intervention
+  intervention.to_json
+end
+
+get '/interventions/:intervention_id' do
+  content_type :json
+  intervention = Intervention.find(params[:intervention_id])
+  status 500 unless intervention
+  intervention.to_json
 end
