@@ -46,3 +46,15 @@ To register an intervention you need to send a POST request with the following d
 
 
 On POSTing an intervention the API will return that intervention along with an ID which allows researchers to poll for the current state of the intervention. 
+
+#Example endponts 
+
+## Create intervention 
+See [here](https://github.com/zooniverse/ZooniverseExperimentServer/blob/master/bin/example_intervention_post.rb) for an example of creating an intervention 
+
+## Interventions for a user 
+[example](http://experiments.zooniverse.org/users/1/interventions)
+
+## Poll interaction 
+[example](http://experiments.zooniverse.org/interventions/551188293033630001000000)
+
