@@ -81,3 +81,49 @@ get '/interventions/:intervention_id' do
   status 500 unless intervention
   intervention.to_json
 end
+
+###### Experimental Participant API
+###### At the moment this only works for an experiment based around maintaining a set list of random & inserted subjects per user, but could be generalized.
+
+get '/experiment/:experiment_name/participants' do
+  content_type :json
+  participants = Participant.find( experiment_name:params[:experiment_name] )
+  if participants
+    participants.all.to_json
+  else
+    halt 404, {'Content-Type' => 'application/json'}, { :error => "No participants found for experiment #{params[:experiment_name]}" }.to_json
+  end
+end
+
+get '/experiment/:experiment_name/participant/:user_id' do
+  content_type :json
+  participant = Participant.find( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
+  if participant
+    participant.to_json
+  else
+    halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found" }.to_json
+  end
+end
+
+post '/experiment/:experiment_name/participant/:user_id' do
+  content_type :json
+  participant = Participant.find( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
+  if participant
+    halt 409, {'Content-Type' => 'application/json'}, '{"error":"Participant "+params[:user_id]+" already registered"}'
+  else
+    participant = Participant.create({experiment_name:                params[:experiment_name],
+                                       user_id:                        params[:user_id],
+                                       active:                         true,
+                                       num_random_subjects_seen:       0,
+                                       num_random_subjects_available:  3,
+                                       interesting_subjects_seen:      [],
+                                       interesting_subjects_available: ["A","B","C"]
+                                      })
+    if participant
+      status 201
+      participant.to_json
+    else
+      halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
+    end
+  end
+end
