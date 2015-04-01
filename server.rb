@@ -87,7 +87,7 @@ end
 
 get '/experiment/:experiment_name/participants' do
   content_type :json
-  participants = Participant.find( experiment_name:params[:experiment_name] )
+  participants = Participant.where(experiment_name:params[:experiment_name])
   if participants
     participants.all.to_json
   else
@@ -97,27 +97,53 @@ end
 
 get '/experiment/:experiment_name/participant/:user_id' do
   content_type :json
-  participant = Participant.find( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
+  participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
   if participant
     participant.to_json
   else
-    halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found" }.to_json
+    halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found in experiment #{params[:experiment_name]}" }.to_json
+  end
+end
+
+delete '/experiment/:experiment_name/participants' do
+  content_type :json
+  participants = Participant.where( experiment_name:params[:experiment_name] )
+  if participants.count > 0
+    status 202
+    participants.all.delete
+    { :message => "Successfully deleted all participants from experiment #{params[:experiment_name]}" }.to_json
+  else
+    halt 404, {'Content-Type' => 'application/json'}, { :error => "No participants to delete for experiment #{params[:experiment_name]}" }.to_json
+  end
+end
+
+delete '/experiment/:experiment_name/participant/:user_id' do
+  content_type :json
+  participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
+  if participant
+    status 202
+    participant.delete
+    { :message => "#{params[:user_id]} successfully deleted from experiment #{params[:experiment_name]}" }.to_json
+  else
+    halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found in experiment #{params[:experiment_name]}" }.to_json
   end
 end
 
 post '/experiment/:experiment_name/participant/:user_id' do
   content_type :json
-  participant = Participant.find( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
-  if participant
-    halt 409, {'Content-Type' => 'application/json'}, '{"error":"Participant "+params[:user_id]+" already registered"}'
+  participants = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
+  if participants.count > 0
+    halt 409, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} already registered in experiment #{params[:experiment_name]}" }.to_json
   else
+    cohort = PlanOut.getCohort(params[:user_id])
     participant = Participant.create({experiment_name:                params[:experiment_name],
                                        user_id:                        params[:user_id],
                                        active:                         true,
+                                       cohort:                         cohort,
                                        num_random_subjects_seen:       0,
                                        num_random_subjects_available:  3,
-                                       interesting_subjects_seen:      [],
-                                       interesting_subjects_available: ["A","B","C"]
+                                       insertion_subjects_seen:        [],
+                                       insertion_subjects_available:   ["A","B","C"]
                                       })
     if participant
       status 201
@@ -125,5 +151,47 @@ post '/experiment/:experiment_name/participant/:user_id' do
     else
       halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
     end
+  end
+end
+
+# mark a random image as seen
+post '/experiment/:experiment_name/participant/:user_id/random' do
+  content_type :json
+  participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
+  if participant
+    status 200
+    if participant[:num_random_subjects_available] >= 1
+      participant[:num_random_subjects_seen]+=1
+      participant[:num_random_subjects_available]-=1
+      participant.save
+      participant.to_json
+    else
+      halt 409, {'Content-Type' => 'application/json'}, { :error => "No more random subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
+    end
+  else
+    halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found in experiment #{params[:experiment_name]}" }.to_json
+  end
+end
+
+# mark an insertion image as seen
+post '/experiment/:experiment_name/participant/:user_id/insertion/:subject_id' do
+  content_type :json
+  participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
+  if participant
+    if participant[:insertion_subjects_available].size >= 1
+      if participant[:insertion_subjects_available].include? params[:subject_id]
+        status 200
+        participant.pull(insertion_subjects_available:params[:subject_id])
+        participant.push(insertion_subjects_seen:params[:subject_id])
+        participant.save
+        participant.to_json
+      else
+        halt 409, {'Content-Type' => 'application/json'}, { :error => "#{params[:subject_id]} is not an available subject for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
+      end
+    else
+      halt 409, {'Content-Type' => 'application/json'}, { :error => "No more random subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
+    end
+  else
+    halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found in experiment #{params[:experiment_name]}" }.to_json
   end
 end
