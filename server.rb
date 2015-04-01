@@ -2,6 +2,7 @@ require 'sinatra'
 require 'json'
 require_relative 'environment'
 
+ADMIN_ENABLED = true
 
 def active_experiments
   experiments = PlanOut.constants.collect{|experiment| experiment.to_s}.select{|experiment_name| experiment_name.include? "Experiment" }
@@ -109,7 +110,7 @@ delete '/experiment/:experiment_name/participants' do
   content_type :json
   participants = Participant.where( experiment_name:params[:experiment_name] )
   if participants.count > 0
-    status 202
+    status 200
     participants.all.delete
     { :message => "Successfully deleted all participants from experiment #{params[:experiment_name]}" }.to_json
   else
@@ -121,7 +122,7 @@ delete '/experiment/:experiment_name/participant/:user_id' do
   content_type :json
   participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
   if participant
-    status 202
+    status 200
     participant.delete
     { :message => "#{params[:user_id]} successfully deleted from experiment #{params[:experiment_name]}" }.to_json
   else
@@ -131,26 +132,24 @@ end
 
 post '/experiment/:experiment_name/participant/:user_id' do
   content_type :json
-  participants = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
-  if participants.count > 0
-    halt 409, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} already registered in experiment #{params[:experiment_name]}" }.to_json
-  else
-    cohort = PlanOut.getCohort(params[:user_id])
-    participant = Participant.create({experiment_name:                params[:experiment_name],
-                                       user_id:                        params[:user_id],
-                                       active:                         true,
-                                       cohort:                         cohort,
-                                       num_random_subjects_seen:       0,
-                                       num_random_subjects_available:  3,
-                                       insertion_subjects_seen:        [],
-                                       insertion_subjects_available:   ["A","B","C"]
-                                      })
-    if participant
-      status 201
-      participant.to_json
+  if ADMIN_ENABLED
+    participants = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
+    if participants.count > 0
+      halt 409, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} already registered in experiment #{params[:experiment_name]}" }.to_json
     else
-      halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
+      experiment = get_experiment(params[:experiment_name]).new
+      participant = experiment.class.registerParticipant(params[:experiment_name],params[:user_id])
+      if participant
+        status 201
+        participant[:cohort] = experiment.class.getCohort(params[:user_id])
+        participant.save
+        participant.to_json
+      else
+        halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
+      end
     end
+  else
+    halt 401, {'Content-Type' => 'application/json'}, '{"error":"Attempted to use administrator method."}'
   end
 end
 
