@@ -7,6 +7,8 @@ module PlanOut
     @@ENV = Assignment.new('http://experiments.zooniverse.org/')  # seed for random assignment to cohorts
     @@SUBJECTS_TO_INSERT_PER_SPECIES = 20                         # how many known subjects will be inserted for each liked species
     @@INSERTION_RATIO = 3                                         # how many times more random subjects should appear than inserted images
+    @@COHORT_CONTROL = "control"
+    @@COHORT_INSERTION = "interesting"
 
     def setup
 
@@ -53,6 +55,15 @@ module PlanOut
                          })
     end
 
+    def assignToControl(participant,fallback=false)
+      participant[:active] = fallback
+      # user is not part of experiment - clear all data.
+      participant[:num_random_subjects_available] = 0
+      participant[:num_random_subjects_seen] = 0
+      participant[:insertion_subjects_available] = []
+      participant[:insertion_subjects_seen] = []
+    end
+
     def assign(params, **inputs)
       participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
       if participant
@@ -64,26 +75,32 @@ module PlanOut
           #status 201
           cohort = self.class.getCohort(inputs[:user_id])
           participant[:cohort] = cohort
-          #TODO get species for this user
-          species="lionMale"
-          subjectIDs = self.class.getInsertionSubjects(species,@@SUBJECTS_TO_INSERT_PER_SPECIES)
-          if subjectIDs
-            participant[:insertion_subjects_available] = subjectIDs
-            participant[:num_random_subjects_available] = subjectIDs.length * @@INSERTION_RATIO
-            #TODO update for multi species
+          if cohort==@@COHORT_CONTROL
+            assignToControl(participant,false)
+            params[:message] = "#{params[:user_id]} assigned to control cohort for experiment #{params[:experiment_name]}"
+          elsif cohort==@@COHORT_INSERTION
+            #TODO get species for this user
+            species="lionMale"
+            subjectIDs = self.class.getInsertionSubjects(species,@@SUBJECTS_TO_INSERT_PER_SPECIES)
+            if subjectIDs
+              participant[:insertion_subjects_available] = subjectIDs
+              participant[:num_random_subjects_available] = subjectIDs.length * @@INSERTION_RATIO
+              #TODO update for multi species
+            else
+              assignToControl(participant,true)
+              participant[:fallback_reason] = "Unable to establish preferences for #{params[:user_id]} in experiment #{params[:experiment_name]} - treating as a control user."
+            end
+            params[:message] = "Successfully registered #{params[:user_id]} as a participant in experiment #{params[:experiment_name]}"
           else
-            participant[:insertion_subjects_available] = []
-            participant[:num_random_subjects_available] = 0
-            #TODO log no subjects error and revert to control.
+            assignToControl(participant,true)
+            participant[:fallback_reason] = "Unrecognized cohort #{cohort} was assigned for #{params[:user_id]} in experiment #{params[:experiment_name]}. Assigning to control."
           end
           participant.save
           participant.attributes.each do |attr_name, attr_value|
             params[attr_name]=attr_value unless attr_name=="_id"
           end
-          params[:cohort] = cohort
-          params[:message] = "Successfully registered #{params[:user_id]} as a participant in experiment #{params[:experiment_name]}"
         else
-          halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
+          params[:error] = "Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]} due to internal error."
         end
       end
     end
@@ -92,5 +109,4 @@ end
 
 __END__
 
-#TODO check cohort, and initialize differently if in control
 #TODO create SQL find user's most liked subjects, and from that, the most liked species
