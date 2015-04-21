@@ -130,6 +130,7 @@ delete '/experiment/:experiment_name/participant/:user_id' do
   end
 end
 
+# register this user in this experiment
 post '/experiment/:experiment_name/participant/:user_id' do
   content_type :json
   if ADMIN_ENABLED
@@ -150,6 +151,34 @@ post '/experiment/:experiment_name/participant/:user_id' do
     end
   else
     halt 401, {'Content-Type' => 'application/json'}, '{"error":"Attempted to use administrator method."}'
+  end
+end
+
+# get the next N subjects for this experimental participant (at random across both random & insertion set)
+# this is read only, it does not modify the queues, it is not a 'pop'
+get '/experiment/:experiment_name/participant/:user_id/next/:number_of_subjects' do
+  content_type :json
+  N = params[:number_of_subjects].to_i
+  participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
+  if participant
+    status 200
+    total_available = participant[:num_random_subjects_available].to_i + participant[:insertion_subjects_available].length
+    if total_available >= N
+      selection_set = participant[:insertion_subjects_available]
+      for i in 1..participant[:num_random_subjects_available]
+        selection_set << "RANDOM"
+      end
+      if selection_set.length < N
+        halt 409, {'Content-Type' => 'application/json'}, { :error => "Only #{selection_set.length} subjects available - not enough to return #{N} for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
+      else
+        selection_set = selection_set.shuffle
+        selection_set.slice(0,N).to_json
+      end
+    else
+      halt 409, {'Content-Type' => 'application/json'}, { :error => "Only #{total_available} subjects available - not enough to return #{N} for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
+    end
+  else
+    halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found in experiment #{params[:experiment_name]}" }.to_json
   end
 end
 
