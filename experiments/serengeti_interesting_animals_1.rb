@@ -137,6 +137,9 @@ module PlanOut
           participant = SerengetiInterestingAnimalsExperiment1::registerParticipant("SerengetiInterestingAnimalsExperiment1",inputs[:user_id])
           SerengetiInterestingAnimalsExperiment1::initializeParticipant(inputs[:user_id],inputs[:experiment_name],params,participant)
         end
+        participant.attributes.each do |attr_name, attr_value|
+          params[attr_name]=attr_value unless attr_name=="_id"
+        end
       else
         params[:error] = "Missing user_id."
       end
