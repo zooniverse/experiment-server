@@ -17,6 +17,19 @@ def get_experiment(experiment_name)
   PlanOut.const_get(experiment_name)
 end
 
+def register_participant(experiment_name,user_id)
+  experiment = get_experiment(experiment_name).new
+  participant = experiment.class.registerParticipant(experiment_name,user_id)
+  if participant
+    status 201
+    participant[:cohort] = experiment.class.getCohort(user_id)
+    participant.save
+    participant.to_json
+  else
+    nil
+  end
+end
+
 get '/active_experiments' do
   content_type :json
 
@@ -138,15 +151,11 @@ post '/experiment/:experiment_name/participant/:user_id' do
     if participants.count > 0
       halt 409, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} already registered in experiment #{params[:experiment_name]}" }.to_json
     else
-      experiment = get_experiment(params[:experiment_name]).new
-      participant = experiment.class.registerParticipant(params[:experiment_name],params[:user_id])
-      if participant
-        status 201
-        participant[:cohort] = experiment.class.getCohort(params[:user_id])
-        participant.save
-        participant.to_json
-      else
+      participant = register_participant(params[:experiment_name],params[:user_id])
+      if participant is nil
         halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
+      else
+        participant
       end
     end
   else
@@ -156,29 +165,34 @@ end
 
 # get the next N subjects for this experimental participant (at random across both random & insertion set)
 # this is read only, it does not modify the queues, it is not a 'pop'
+# it will also ensure the participant is registered.
 get '/experiment/:experiment_name/participant/:user_id/next/:number_of_subjects' do
   content_type :json
   N = params[:number_of_subjects].to_i
   participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
-  if participant
-    status 200
-    total_available = participant[:num_random_subjects_available].to_i + participant[:insertion_subjects_available].length
-    if total_available >= N
-      selection_set = participant[:insertion_subjects_available]
-      for i in 1..participant[:num_random_subjects_available]
-        selection_set << "RANDOM"
-      end
-      if selection_set.length < N
-        halt 409, {'Content-Type' => 'application/json'}, { :error => "Only #{selection_set.length} subjects available - not enough to return #{N} for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
-      else
-        selection_set = selection_set.shuffle
-        selection_set.slice(0,N).to_json
-      end
+  if !participant.present?
+    participant = register_participant(params[:experiment_name],params[:user_id])
+    if participant.nil?
+      halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
+    end
+  end
+  status 200
+  experiment = get_experiment(params[:experiment_name]).new
+  experiment.class.initializeParticipant(params[:user_id],params[:experiment_name],params,participant)
+  total_available = participant[:num_random_subjects_available].to_i + participant[:insertion_subjects_available].length
+  if total_available >= N
+    selection_set = participant[:insertion_subjects_available]
+    for i in 1..participant[:num_random_subjects_available]
+      selection_set << "RANDOM"
+    end
+    if selection_set.length < N
+      halt 409, {'Content-Type' => 'application/json'}, { :error => "Only #{selection_set.length} subjects available - not enough to return #{N} for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
     else
-      halt 409, {'Content-Type' => 'application/json'}, { :error => "Only #{total_available} subjects available - not enough to return #{N} for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
+      selection_set = selection_set.shuffle
+      selection_set.slice(0,N).to_json
     end
   else
-    halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found in experiment #{params[:experiment_name]}" }.to_json
+    halt 409, {'Content-Type' => 'application/json'}, { :error => "Only #{total_available} subjects available - not enough to return #{N} for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
   end
 end
 

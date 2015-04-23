@@ -76,61 +76,69 @@ module PlanOut
                          })
     end
 
-    def assignToControl(participant,active=true)
+    def self.assignToControl(participant,active=true)
       participant[:active] = active
-      # user is not part of experiment - clear all data.
+      participant[:cohort] = "control"
+      # user is not part of experiment - clear all "available" data (but leave a record of "seen")
       participant[:num_random_subjects_available] = 0
-      participant[:num_random_subjects_seen] = 0
       participant[:insertion_subjects_available] = []
-      participant[:insertion_subjects_seen] = []
+    end
+
+    def self.initializeParticipant(user_id,experiment_name,params,participant)
+      if participant
+        cohort = SerengetiInterestingAnimalsExperiment1::getCohort(user_id)
+        participant[:cohort] = cohort
+        if cohort==@@COHORT_CONTROL
+          SerengetiInterestingAnimalsExperiment1.assignToControl(participant,true)
+          params[:message] = "#{user_id} assigned to control cohort for experiment #{experiment_name}"
+        elsif cohort==@@COHORT_INSERTION
+          speciesList = SerengetiInterestingAnimalsExperiment1::getLikedSpecies(user_id,2)
+          if speciesList && speciesList.length > 0
+            participant[:most_liked_species] = speciesList
+            subjectIDs = []
+            speciesList.each do |species|
+                # insert subjects for this species
+                subjectIDs.concat(SerengetiInterestingAnimalsExperiment1::getInsertionSubjects(species,@@SUBJECTS_TO_INSERT_PER_SPECIES))
+            end
+            if subjectIDs.length > 0
+              participant[:insertion_subjects_available] = subjectIDs
+              participant[:num_random_subjects_available] = subjectIDs.length * @@INSERTION_RATIO
+            else
+              SerengetiInterestingAnimalsExperiment1.assignToControl(participant,false)
+              participant[:fallback_reason] = "Unable to find subjects to insert for #{user_id} in experiment #{experiment_name} - treating as a control user."
+            end
+          else
+            SerengetiInterestingAnimalsExperiment1.assignToControl(participant,false)
+            participant[:fallback_reason] = "Unable to establish preferences for #{user_id} in experiment #{experiment_name} - treating as a control user."
+          end
+          params[:message] = "Successfully registered #{user_id} as a participant in experiment #{experiment_name}"
+        else
+          SerengetiInterestingAnimalsExperiment1.assignToControl(participant,false)
+          participant[:fallback_reason] = "Unrecognized cohort #{cohort} was assigned for #{user_id} in experiment #{experiment_name}. Assigning to control."
+        end
+        participant.save
+        participant.attributes.each do |attr_name, attr_value|
+          params[attr_name]=attr_value unless attr_name=="_id"
+        end
+      else
+        params[:error] = "Could not register participant #{user_id} for experiment #{experiment_name} due to internal error."
+      end
+
     end
 
     def assign(params, **inputs)
-      participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
-      if participant
-        #status 200
-        participant.to_json
-      else
-        participant = self.class.registerParticipant("SerengetiInterestingAnimalsExperiment1",inputs[:user_id])
+      if inputs[:user_id].present?
+        participant = Participant.where( experiment_name:inputs[:experiment_name] , user_id:inputs[:user_id] ).first
         if participant
-          #status 201
-          cohort = self.class.getCohort(inputs[:user_id])
-          participant[:cohort] = cohort
-          if cohort==@@COHORT_CONTROL
-            assignToControl(participant,true)
-            params[:message] = "#{inputs[:user_id]} assigned to control cohort for experiment #{inputs[:experiment_name]}"
-          elsif cohort==@@COHORT_INSERTION
-            speciesList = self.class.getLikedSpecies(inputs[:user_id],2)
-            if speciesList && speciesList.length > 0
-              participant[:most_liked_species] = speciesList
-              subjectIDs = []
-              speciesList.each do |species|
-                  # insert subjects for this species
-                  subjectIDs.concat(self.class.getInsertionSubjects(species,@@SUBJECTS_TO_INSERT_PER_SPECIES))
-              end
-              if subjectIDs.length > 0
-                participant[:insertion_subjects_available] = subjectIDs
-                participant[:num_random_subjects_available] = subjectIDs.length * @@INSERTION_RATIO
-              else
-                assignToControl(participant,false)
-                participant[:fallback_reason] = "Unable to find subjects to insert for #{inputs[:user_id]} in experiment #{inputs[:experiment_name]} - treating as a control user."
-              end
-            else
-              assignToControl(participant,false)
-              participant[:fallback_reason] = "Unable to establish preferences for #{inputs[:user_id]} in experiment #{inputs[:experiment_name]} - treating as a control user."
-            end
-            params[:message] = "Successfully registered #{inputs[:user_id]} as a participant in experiment #{inputs[:experiment_name]}"
-          else
-            assignToControl(participant,false)
-            participant[:fallback_reason] = "Unrecognized cohort #{cohort} was assigned for #{inputs[:user_id]} in experiment #{inputs[:experiment_name]}. Assigning to control."
-          end
-          participant.save
-          participant.attributes.each do |attr_name, attr_value|
-            params[attr_name]=attr_value unless attr_name=="_id"
-          end
+          #status 200
+          params[:message] = "#{inputs[:user_id]} already assigned for experiment #{inputs[:experiment_name]}"
+          participant.to_json
         else
-          params[:error] = "Could not register participant #{inputs[:user_id]} for experiment #{inputs[:experiment_name]} due to internal error."
+          participant = SerengetiInterestingAnimalsExperiment1::registerParticipant("SerengetiInterestingAnimalsExperiment1",inputs[:user_id])
+          SerengetiInterestingAnimalsExperiment1::initializeParticipant(inputs[:user_id],inputs[:experiment_name],params,participant)
         end
+      else
+        params[:error] = "Missing user_id."
       end
     end
   end
