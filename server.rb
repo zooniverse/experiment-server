@@ -89,7 +89,7 @@ end
 get '/experiment/:experiment_name/participants' do
   content_type :json
   participants = Participant.where(experiment_name:params[:experiment_name])
-  if participants
+  if participants.length>0
     participants.all.to_json
   else
     halt 404, {'Content-Type' => 'application/json'}, { :error => "No participants found for experiment #{params[:experiment_name]}" }.to_json

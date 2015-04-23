@@ -8,6 +8,7 @@ class Participant
     field :num_random_subjects_available, type: Integer
     field :insertion_subjects_seen, type: Array
     field :insertion_subjects_available, type: Array
+    field :most_liked_species, type: Array
     field :fallback, type: Mongoid::Boolean
     field :fallback_reason, type: String
 
