@@ -30,7 +30,6 @@ module PlanOut
        begin
           con = Mysql.new 'zooniverse-db1.cezuuccr9cw6.us-east-1.rds.amazonaws.com', 'geordi-agent', '7yofU[GPO3?lAOD', 'geordi'
           query = 'SELECT secondaryID FROM user_profile WHERE userID="'+userID+'" ORDER BY score DESC;'
-          puts query
           rs = con.query(query)
           rs.each do |row|
             data << row[0]
