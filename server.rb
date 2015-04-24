@@ -32,7 +32,9 @@ end
 
 get '/active_experiments' do
   content_type :json
-
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   if project = params[:project]
     active_experiments_for_project(project).to_json
   else
@@ -64,6 +66,9 @@ end
 
 get '/users/:user_id/interventions' do
   content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   results = Intervention.where( state: "active", user_id: params[:user_id])
   if params[:project]
     results = results.where(project_name: params[:project])
@@ -73,6 +78,9 @@ end
 
 post '/users/:user_id/interventions' do
   content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   intervention  = Intervention.create({user_id:               params["user_id"],
                                        project:               params["project"],
                                        intervention_type:     params["intervention_type"],
@@ -91,6 +99,9 @@ end
 
 get '/interventions/:intervention_id' do
   content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   intervention = Intervention.find(params[:intervention_id])
   status 500 unless intervention
   intervention.to_json
@@ -101,6 +112,9 @@ end
 
 get '/experiment/:experiment_name/participants' do
   content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   participants = Participant.where(experiment_name:params[:experiment_name])
   if participants.length>0
     participants.all.to_json
@@ -111,6 +125,9 @@ end
 
 get '/experiment/:experiment_name/participant/:user_id' do
   content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
   if participant
     participant.to_json
@@ -121,6 +138,9 @@ end
 
 delete '/experiment/:experiment_name/participants' do
   content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   participants = Participant.where( experiment_name:params[:experiment_name] )
   if participants.count > 0
     status 200
@@ -133,6 +153,9 @@ end
 
 delete '/experiment/:experiment_name/participant/:user_id' do
   content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
   if participant
     status 200
@@ -146,6 +169,9 @@ end
 # register this user in this experiment
 post '/experiment/:experiment_name/participant/:user_id' do
   content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   if ADMIN_ENABLED
     participants = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
     if participants.count > 0
@@ -168,6 +194,9 @@ end
 # it will also ensure the participant is registered.
 get '/experiment/:experiment_name/participant/:user_id/next/:number_of_subjects' do
   content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   N = params[:number_of_subjects].to_i
   participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
   if !participant.present?
@@ -199,6 +228,9 @@ end
 # mark a random image as seen
 post '/experiment/:experiment_name/participant/:user_id/random' do
   content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
   if participant
     status 200
@@ -218,6 +250,9 @@ end
 # mark an insertion image as seen
 post '/experiment/:experiment_name/participant/:user_id/insertion/:subject_id' do
   content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
   if participant
     if participant[:insertion_subjects_available].size >= 1
