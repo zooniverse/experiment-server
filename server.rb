@@ -24,7 +24,7 @@ def register_participant(experiment_name,user_id)
     status 201
     participant[:cohort] = experiment.class.getCohort(user_id)
     participant.save
-    participant.to_json
+    participant
   else
     nil
   end
@@ -181,7 +181,7 @@ post '/experiment/:experiment_name/participant/:user_id' do
       if participant is nil
         halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
       else
-        participant
+        participant.to_json
       end
     end
   else
@@ -215,13 +215,17 @@ get '/experiment/:experiment_name/participant/:user_id/next/:number_of_subjects'
       selection_set << "RANDOM"
     end
     if selection_set.length < N
-      halt 409, {'Content-Type' => 'application/json'}, { :error => "Only #{selection_set.length} subjects available - not enough to return #{N} for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
+      halt 409, {'Content-Type' => 'application/json'}, { :error => "Only #{selection_set.length} subjects available - not enough to return #{N} for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
     else
       selection_set = selection_set.shuffle
-      selection_set.slice(0,N).to_json
+      response = {
+        :nextSubjectIDs => selection_set.slice(0,N),
+        :participant => participant
+      }
+      response.to_json
     end
   else
-    halt 409, {'Content-Type' => 'application/json'}, { :error => "Only #{total_available} subjects available - not enough to return #{N} for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
+    halt 409, {'Content-Type' => 'application/json'}, { :error => "Only #{total_available} subjects available - not enough to return #{N} for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
   end
 end
 
@@ -240,7 +244,7 @@ post '/experiment/:experiment_name/participant/:user_id/random' do
       participant.save
       participant.to_json
     else
-      halt 409, {'Content-Type' => 'application/json'}, { :error => "No more random subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
+      halt 409, {'Content-Type' => 'application/json'}, { :error => "No more random subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
     end
   else
     halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found in experiment #{params[:experiment_name]}" }.to_json
@@ -263,10 +267,10 @@ post '/experiment/:experiment_name/participant/:user_id/insertion/:subject_id' d
         participant.save
         participant.to_json
       else
-        halt 409, {'Content-Type' => 'application/json'}, { :error => "#{params[:subject_id]} is not an available subject for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
+        halt 409, {'Content-Type' => 'application/json'}, { :error => "#{params[:subject_id]} is not an available subject for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
       end
     else
-      halt 409, {'Content-Type' => 'application/json'}, { :error => "No more random subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}" }.to_json
+      halt 409, {'Content-Type' => 'application/json'}, { :error => "No more random subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
     end
   else
     halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found in experiment #{params[:experiment_name]}" }.to_json
