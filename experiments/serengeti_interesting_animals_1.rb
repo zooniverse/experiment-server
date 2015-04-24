@@ -5,8 +5,8 @@ require "pry"
 module PlanOut
   class SerengetiInterestingAnimalsExperiment1 < PlanOut::SimpleExperiment
     @@ENV = Assignment.new('http://experiments.zooniverse.org/')  # seed for random assignment to cohorts
-    @@SUBJECTS_TO_INSERT_PER_SPECIES = 12                         # how many known subjects will be inserted for each liked species
-    @@INSERTION_RATIO = 3                                         # how many times more random subjects should appear than inserted images
+    @@SUBJECTS_TO_INSERT_PER_SPECIES = 4                          # how many known subjects will be inserted for each liked species
+    @@INSERTION_RATIO = 2                                         # how many times more random subjects should appear than inserted images
     @@COHORT_CONTROL = "control"
     @@COHORT_INSERTION = "interesting"
 
