@@ -210,7 +210,14 @@ get '/experiment/:experiment_name/participant/:user_id/next/:number_of_subjects'
   status 200
 
   total_available = participant[:num_random_subjects_available].to_i + participant[:insertion_subjects_available].length
-  if total_available >= N
+  if total_available == 0
+    experiment = get_experiment(params[:experiment_name]).new
+    experiment.class.assignToControl(participant,false)
+    participant[:fallback] = true
+    participant[:fallback_reason] = "#{params[:user_id]} has completed experiment #{params[:experiment_name]} - now treating as a standard/control user."
+    participant.save
+    participant.to_json
+  elsif total_available >= N
     selection_set = participant[:insertion_subjects_available].map do |e| e.dup end
     for i in 1..participant[:num_random_subjects_available]
       selection_set << "RANDOM"
