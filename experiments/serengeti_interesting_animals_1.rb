@@ -105,15 +105,18 @@ module PlanOut
               participant[:num_random_subjects_available] = subjectIDs.length * @@INSERTION_RATIO
             else
               SerengetiInterestingAnimalsExperiment1.assignToControl(participant,false)
+              participant[:fallback] = true
               participant[:fallback_reason] = "Unable to find subjects to insert for #{user_id} in experiment #{experiment_name} - treating as a control user."
             end
           else
             SerengetiInterestingAnimalsExperiment1.assignToControl(participant,false)
+            participant[:fallback] = true
             participant[:fallback_reason] = "Unable to establish preferences for #{user_id} in experiment #{experiment_name} - treating as a control user."
           end
           params[:message] = "Successfully registered #{user_id} as a participant in experiment #{experiment_name}"
         else
           SerengetiInterestingAnimalsExperiment1.assignToControl(participant,false)
+          participant[:fallback] = true
           participant[:fallback_reason] = "Unrecognized cohort #{cohort} was assigned for #{user_id} in experiment #{experiment_name}. Assigning to control."
         end
         participant.save
