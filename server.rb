@@ -264,7 +264,11 @@ post '/experiment/:experiment_name/participant/:user_id/insertion/:subject_id' d
       if participant[:insertion_subjects_available].include? params[:subject_id]
         status 200
         participant.pull(insertion_subjects_available:params[:subject_id])
-        participant.push(insertion_subjects_seen:params[:subject_id])
+        if participant[:insertion_subjects_seen].size == 0
+          participant[:insertion_subjects_seen] = [params[:subject_id]]
+        else
+          participant.push(insertion_subjects_seen:params[:subject_id])
+        end
         participant.save
         participant.to_json
       else
