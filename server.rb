@@ -204,13 +204,14 @@ get '/experiment/:experiment_name/participant/:user_id/next/:number_of_subjects'
     if participant.nil?
       halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
     end
+    experiment = get_experiment(params[:experiment_name]).new
+    experiment.class.initializeParticipant(params[:user_id],params[:experiment_name],params,participant)
   end
   status 200
-  experiment = get_experiment(params[:experiment_name]).new
-  experiment.class.initializeParticipant(params[:user_id],params[:experiment_name],params,participant)
+
   total_available = participant[:num_random_subjects_available].to_i + participant[:insertion_subjects_available].length
   if total_available >= N
-    selection_set = participant[:insertion_subjects_available]
+    selection_set = participant[:insertion_subjects_available].map do |e| e.dup end
     for i in 1..participant[:num_random_subjects_available]
       selection_set << "RANDOM"
     end
