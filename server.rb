@@ -274,7 +274,7 @@ post '/experiment/:experiment_name/participant/:user_id/insertion/:subject_id' d
         if participant[:insertion_subjects_seen].size == 0
           participant[:insertion_subjects_seen] = [params[:subject_id]]
         else
-          participant.push(insertion_subjects_seen:[params[:subject_id]])
+          participant.add_to_set(insertion_subjects_seen:params[:subject_id].to_s)
         end
         participant.save
         participant.to_json
