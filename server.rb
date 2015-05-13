@@ -30,6 +30,10 @@ def register_participant(experiment_name,user_id)
   end
 end
 
+get '/' do
+  "OK"
+end
+
 get '/active_experiments' do
   content_type :json
   headers \
