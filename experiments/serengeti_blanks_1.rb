@@ -134,20 +134,30 @@ module PlanOut
         participant[:blank_subjects_available] = []
         participant[:non_blank_subjects_available] = []
         if cohort!=@@COHORT_CONTROL
-            blanks = SerengetiBlanksExperiment1.getNumberOfBlanks(cohort)
-            non_blanks = SerengetiBlanksExperiment1.getNumberOfNonBlanks(cohort)
-            for i in 1..blanks
+          # figure out the subject IDs for experimental cohorts and prepare the subject sets
+          blanks = SerengetiBlanksExperiment1.getNumberOfBlanks(cohort)
+          non_blanks = SerengetiBlanksExperiment1.getNumberOfNonBlanks(cohort)
+          do_not_repeat_these = []
+          for i in 1..blanks
+            blankSubjectID = SerengetiBlanksExperiment1.getBlankSubjectID()
+            until blankSubjectID.present? and !do_not_repeat_these.include? blankSubjectID do
               blankSubjectID = SerengetiBlanksExperiment1.getBlankSubjectID()
-              if !blankSubjectID.nil?
-                participant[:blank_subjects_available].push(blankSubjectID)
+              if !do_not_repeat_these.include? blankSubjectID
+                do_not_repeat_these.push blankSubjectID
               end
             end
-            for i in 1..non_blanks
+            participant[:blank_subjects_available].push(blankSubjectID)
+          end
+          for i in 1..non_blanks
+            nonBlankSubjectID = SerengetiBlanksExperiment1.getNonBlankSubjectID()
+            until nonBlankSubjectID.present? and !do_not_repeat_these.include? nonBlankSubjectID do
               nonBlankSubjectID = SerengetiBlanksExperiment1.getNonBlankSubjectID()
-              if !nonBlankSubjectID.nil?
-                participant[:non_blank_subjects_available].push(nonBlankSubjectID)
+              if !do_not_repeat_these.include? nonBlankSubjectID
+                do_not_repeat_these.push nonBlankSubjectID
               end
             end
+            participant[:non_blank_subjects_available].push(nonBlankSubjectID)
+          end
         end
         participant.save
         params[:message] = "Successfully registered #{user_id} as a participant in experiment #{experiment_name}, cohort #{cohort}"

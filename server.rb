@@ -144,7 +144,7 @@ delete '/experiment/:experiment_name/participants' do
   participants = Participant.where( experiment_name:params[:experiment_name] )
   if participants.count > 0
     status 200
-    participants.all.delete
+    Participant.where(experiment_name:params[:experiment_name]).delete
     { :message => "Successfully deleted all participants from experiment #{params[:experiment_name]}" }.to_json
   else
     halt 404, {'Content-Type' => 'application/json'}, { :error => "No participants to delete for experiment #{params[:experiment_name]}" }.to_json
