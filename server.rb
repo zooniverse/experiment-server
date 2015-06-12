@@ -20,7 +20,7 @@ end
 def register_participant(experiment_name,user_id)
   experiment = get_experiment(experiment_name).new
   participant = experiment.class.registerParticipant(experiment_name,user_id)
-  if participant
+  if participant.present?
     status 201
     participant[:cohort] = experiment.class.getCohort(user_id)
     participant.save
@@ -167,27 +167,30 @@ delete '/experiment/:experiment_name/participant/:user_id' do
 end
 
 # register this user in this experiment
-post '/experiment/:experiment_name/participant/:user_id' do
-  content_type :json
-  headers \
-    "Access-Control-Allow-Origin"   => "*",
-    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  if ADMIN_ENABLED
-    participants = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
-    if participants.count > 0
-      halt 409, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} already registered in experiment #{params[:experiment_name]}" }.to_json
-    else
-      participant = register_participant(params[:experiment_name],params[:user_id])
-      if participant is nil
-        halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
-      else
-        participant.to_json
-      end
-    end
-  else
-    halt 401, {'Content-Type' => 'application/json'}, '{"error":"Attempted to use administrator method."}'
-  end
-end
+#
+# .. temporarily disabled, as it doesn't initialize blank arrays yet ... use request next N instead.
+#
+# post '/experiment/:experiment_name/participant/:user_id' do
+#   content_type :json
+#   headers \
+#     "Access-Control-Allow-Origin"   => "*",
+#     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
+#   if ADMIN_ENABLED
+#     participants = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
+#     if participants.count > 0
+#       halt 409, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} already registered in experiment #{params[:experiment_name]}" }.to_json
+#     else
+#       participant = register_participant(params[:experiment_name],params[:user_id])
+#       if participant.nil?
+#         halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
+#       else
+#         participant.to_json
+#       end
+#     end
+#   else
+#     halt 401, {'Content-Type' => 'application/json'}, '{"error":"Attempted to use administrator method."}'
+#   end
+# end
 
 # get the next N subjects for this experimental participant (at random across both random & insertion set)
 # this is read only, it does not modify the queues, it is not a 'pop'
@@ -209,13 +212,15 @@ get '/experiment/:experiment_name/participant/:user_id/next/:number_of_subjects'
   end
   status 200
 
-  total_available = participant[:num_random_subjects_available].to_i + participant[:insertion_subjects_available].length
+  total_available = participant[:blank_subjects_available].length + participant[:non_blank_subjects_available].length
   if total_available == 0
     experiment = get_experiment(params[:experiment_name]).new
-    participant[:excluded] = true
-    participant[:excluded_reason] = "#{params[:user_id]} has completed experiment #{params[:experiment_name]}."
-    participant.save
-    participant.to_json
+    experiment.class.deactivateParticipant(participant)
+    response = {
+        :nextSubjectIDs => [],
+        :participant => participant
+    }
+    response.to_json
   elsif total_available >= N
     blanks = participant[:blank_subjects_available].map do |e| e.dup end
     non_blanks = participant[:non_blank_subjects_available].map do |e| e.dup end
@@ -298,14 +303,22 @@ post '/experiment/:experiment_name/participant/:user_id/:subject_id' do
         no_non_blanks = true
       end
     end
+    if participant[:blank_subjects_available].size == 0 and participant[:non_blank_subjects_available].size == 0
+      experiment = get_experiment(params[:experiment_name]).new
+      experiment.class.deactivateParticipant(participant)
+      params[:message] = "#{params[:user_id]} has completed experiment #{params[:experiment_name]}."
+      participant.attributes.each do |attr_name, attr_value|
+        params[attr_name]=attr_value unless attr_name=="_id"
+      end
+    end
     if found
       participant.save
       participant.to_json
     else
       if no_blanks and no_non_blanks
-        halt 409, {'Content-Type' => 'application/json'}, { :error => "No more subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
-      else
         halt 409, {'Content-Type' => 'application/json'}, { :error => "#{params[:subject_id]} is not an available subject for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
+      else
+        halt 409, {'Content-Type' => 'application/json'}, { :error => "No more subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
       end
     end
   else

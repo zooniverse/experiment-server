@@ -12,7 +12,6 @@ module PlanOut
     @@COHORT_60 = "20"
     @@COHORT_80 = "20"
     @@COHORT_INELIGIBLE = "ineligible"
-    @@COHORT_DEACTIVATED = "deactivated"
     @@COHORT_CONTROL = "control"
     @@DB_HOST = 'zooniverse-db1.cezuuccr9cw6.us-east-1.rds.amazonaws.com'
     @@DB_USERNAME = 'geordi-agent'
@@ -29,9 +28,7 @@ module PlanOut
     end
 
     def self.getNumberOfBlanks(cohort)
-      if cohort == @@COHORT_00
-        return 0
-      elsif cohort == @@COHORT_20
+      if cohort == @@COHORT_20
         return (0.2 * @@SUBJECTS_IN_SET).round
       elsif cohort == @@COHORT_40
         return (0.4 * @@SUBJECTS_IN_SET).round
@@ -40,7 +37,7 @@ module PlanOut
       elsif cohort == @@COHORT_80
         return (0.8 * @@SUBJECTS_IN_SET).round
       else
-        return nil
+        return 0
       end
     end
 
@@ -56,49 +53,52 @@ module PlanOut
       elsif cohort == @@COHORT_80
         return (0.2 * @@SUBJECTS_IN_SET).round
       else
-        return nil
+        return 0
       end
     end
 
     def self.getCohort(user_id)
       UniformChoice.new({
-          choices: [@COHORT_00,@COHORT_20,@COHORT_40,@COHORT_60,@COHORT_80,@COHORT_CONTROL],
+          choices: [@@COHORT_00,@@COHORT_20,@@COHORT_40,@@COHORT_60,@@COHORT_80,@@COHORT_CONTROL],
           unit: user_id
         }).execute(@@ENV)
     end
 
     def self.getNonBlankSubjectID()
-      subjectID = nil
       begin
-         con = Mysql.new @@DB_HOST,@DB_USERNAME,@DB_PASSWORD,@DB_DATABASE
-         query = 'SELECT subjectID FROM subject_species_all AS r1 JOIN (SELECT CEIL(RAND() * (SELECT MAX(id) FROM subject_species_all)) AS id) AS r2 WHERE r1.id >= r2.id AND r1.species<>"blank" ORDER BY r1.id ASC LIMIT 1;'
-          rs = con.query(query)
-          rs.each do |row|
-            data = row[0].to_s
-          end
+        subjectID = nil
+        con = Mysql.new @@DB_HOST,@@DB_USERNAME,@@DB_PASSWORD,@@DB_DATABASE
+        query = 'SELECT subjectID FROM subject_species_all AS r1 JOIN (SELECT CEIL(RAND() * (SELECT MAX(id) FROM subject_species_all)) AS id) AS r2 WHERE r1.id >= r2.id AND r1.species<>"blank" ORDER BY r1.id ASC LIMIT 1;'
+        rs = con.query(query)
+        rs.each do |row|
+          subjectID = row[0].to_s
+        end
+        return subjectID
       rescue Mysql::Error => e
-          return nil
+        puts e
+        return nil
       ensure
-          con.close if con
+        con.close if con
       end
-      return data
     end
 
     def self.getBlankSubjectID()
       subjectID = nil
       begin
-         con = Mysql.new @@DB_HOST,@DB_USERNAME,@DB_PASSWORD,@DB_DATABASE
-         query = 'SELECT subjectID FROM subject_species_all AS r1 JOIN (SELECT CEIL(RAND() * (SELECT MAX(id) FROM subject_species_all)) AS id) AS r2 WHERE r1.id >= r2.id AND r1.species=="blank" ORDER BY r1.id ASC LIMIT 1;'
-          rs = con.query(query)
-          rs.each do |row|
-            data = row[0].to_s
-          end
+        subjectID = nil
+        con = Mysql.new @@DB_HOST,@@DB_USERNAME,@@DB_PASSWORD,@@DB_DATABASE
+        query = 'SELECT subjectID FROM subject_species_all AS r1 JOIN (SELECT CEIL(RAND() * (SELECT MAX(id) FROM subject_species_all)) AS id) AS r2 WHERE r1.id >= r2.id AND r1.species="blank" ORDER BY r1.id ASC LIMIT 1;'
+        rs = con.query(query)
+        rs.each do |row|
+          subjectID = row[0].to_s
+        end
+        return subjectID
       rescue Mysql::Error => e
-          return nil
+        puts e
+        return nil
       ensure
-          con.close if con
+        con.close if con
       end
-      return data
     end
 
     def self.registerParticipant(experiment_name,user_id)
@@ -106,7 +106,8 @@ module PlanOut
                           user_id:                        user_id,
                           active:                         true,
                           non_blank_subjects_seen:        [],
-                          blank_subjects_seen:            []
+                          blank_subjects_seen:            [],
+                          excluded:                       false
                          })
     end
 
@@ -120,10 +121,10 @@ module PlanOut
 
     def self.deactivateParticipant(participant)
       participant[:active] = false
-      participant[:cohort] = @@COHORT_DEACTIVATED
       # user is not part of experiment - clear all "available" data (but leave a record of "seen")
       participant[:blank_subjects_available] = []
       participant[:non_blank_subjects_available] = []
+      participant.save
     end
 
     def self.initializeParticipant(user_id,experiment_name,params,participant)
@@ -137,18 +138,22 @@ module PlanOut
             non_blanks = SerengetiBlanksExperiment1.getNumberOfNonBlanks(cohort)
             for i in 1..blanks
               blankSubjectID = SerengetiBlanksExperiment1.getBlankSubjectID()
-              if blankSubjectID?
-                participant[:blank_subjects_available].concat(blankSubjectID)
+              if !blankSubjectID.nil?
+                participant[:blank_subjects_available].push(blankSubjectID)
               end
             end
             for i in 1..non_blanks
               nonBlankSubjectID = SerengetiBlanksExperiment1.getNonBlankSubjectID()
-              if blankSubjectID?
-                participant[:non_blank_subjects_available].concat(nonBlankSubjectID)
+              if !nonBlankSubjectID.nil?
+                participant[:non_blank_subjects_available].push(nonBlankSubjectID)
               end
             end
         end
+        participant.save
         params[:message] = "Successfully registered #{user_id} as a participant in experiment #{experiment_name}, cohort #{cohort}"
+        participant.attributes.each do |attr_name, attr_value|
+          params[attr_name]=attr_value unless attr_name=="_id"
+        end
       else
         params[:error] = "Could not register participant #{user_id} for experiment #{experiment_name} due to internal error."
       end
@@ -157,7 +162,7 @@ module PlanOut
     def assign(params, **inputs)
       if inputs[:user_id].present?
         participant = Participant.where( experiment_name:inputs[:experiment_name] , user_id:inputs[:user_id] ).first
-        if participant
+        if participant.present?
           #status 200
           params[:message] = "#{inputs[:user_id]} already assigned for experiment #{inputs[:experiment_name]}"
           participant.to_json

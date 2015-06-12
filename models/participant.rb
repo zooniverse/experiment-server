@@ -8,7 +8,6 @@ class Participant
     field :blank_subjects_seen, type: Array
     field :non_blank_subjects_available, type: Array
     field :blank_subjects_available, type: Array
-    field :most_liked_species, type: Array
     field :excluded, type: Mongoid::Boolean
     field :excluded_reason, type: String
 
