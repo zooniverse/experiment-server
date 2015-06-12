@@ -20,7 +20,7 @@ end
 def register_participant(experiment_name,user_id)
   experiment = get_experiment(experiment_name).new
   participant = experiment.class.registerParticipant(experiment_name,user_id)
-  if participant
+  if participant.present?
     status 201
     participant[:cohort] = experiment.class.getCohort(user_id)
     participant.save
@@ -148,7 +148,7 @@ delete '/experiment/:experiment_name/participants' do
   participants = Participant.where( experiment_name:params[:experiment_name] )
   if participants.count > 0
     status 200
-    participants.all.delete
+    Participant.where(experiment_name:params[:experiment_name]).delete
     { :message => "Successfully deleted all participants from experiment #{params[:experiment_name]}" }.to_json
   else
     halt 404, {'Content-Type' => 'application/json'}, { :error => "No participants to delete for experiment #{params[:experiment_name]}" }.to_json
@@ -171,27 +171,30 @@ delete '/experiment/:experiment_name/participant/:user_id' do
 end
 
 # register this user in this experiment
-post '/experiment/:experiment_name/participant/:user_id' do
-  content_type :json
-  headers \
-    "Access-Control-Allow-Origin"   => "*",
-    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  if ADMIN_ENABLED
-    participants = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
-    if participants.count > 0
-      halt 409, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} already registered in experiment #{params[:experiment_name]}" }.to_json
-    else
-      participant = register_participant(params[:experiment_name],params[:user_id])
-      if participant is nil
-        halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
-      else
-        participant.to_json
-      end
-    end
-  else
-    halt 401, {'Content-Type' => 'application/json'}, '{"error":"Attempted to use administrator method."}'
-  end
-end
+#
+# .. temporarily disabled, as it doesn't initialize blank arrays yet ... use request next N instead.
+#
+# post '/experiment/:experiment_name/participant/:user_id' do
+#   content_type :json
+#   headers \
+#     "Access-Control-Allow-Origin"   => "*",
+#     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
+#   if ADMIN_ENABLED
+#     participants = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] )
+#     if participants.count > 0
+#       halt 409, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} already registered in experiment #{params[:experiment_name]}" }.to_json
+#     else
+#       participant = register_participant(params[:experiment_name],params[:user_id])
+#       if participant.nil?
+#         halt 500, {'Content-Type' => 'application/json'}, '{"error":"Could not register participant #{params[:user_id]} for experiment #{params[:experiment_name]}."}'
+#       else
+#         participant.to_json
+#       end
+#     end
+#   else
+#     halt 401, {'Content-Type' => 'application/json'}, '{"error":"Attempted to use administrator method."}'
+#   end
+# end
 
 # get the next N subjects for this experimental participant (at random across both random & insertion set)
 # this is read only, it does not modify the queues, it is not a 'pop'
@@ -213,19 +216,19 @@ get '/experiment/:experiment_name/participant/:user_id/next/:number_of_subjects'
   end
   status 200
 
-  total_available = participant[:num_random_subjects_available].to_i + participant[:insertion_subjects_available].length
+  total_available = participant[:blank_subjects_available].length + participant[:non_blank_subjects_available].length
   if total_available == 0
     experiment = get_experiment(params[:experiment_name]).new
-    experiment.class.assignToControl(participant,false)
-    participant[:fallback] = true
-    participant[:fallback_reason] = "#{params[:user_id]} has completed experiment #{params[:experiment_name]} - now treating as a standard/control user."
-    participant.save
-    participant.to_json
+    experiment.class.deactivateParticipant(participant)
+    response = {
+        :nextSubjectIDs => [],
+        :participant => participant
+    }
+    response.to_json
   elsif total_available >= N
-    selection_set = participant[:insertion_subjects_available].map do |e| e.dup end
-    for i in 1..participant[:num_random_subjects_available]
-      selection_set << "RANDOM"
-    end
+    blanks = participant[:blank_subjects_available].map do |e| e.dup end
+    non_blanks = participant[:non_blank_subjects_available].map do |e| e.dup end
+    selection_set = blanks.concat(non_blanks)
     if selection_set.length < N
       halt 409, {'Content-Type' => 'application/json'}, { :error => "Only #{selection_set.length} subjects available - not enough to return #{N} for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
     else
@@ -242,51 +245,85 @@ get '/experiment/:experiment_name/participant/:user_id/next/:number_of_subjects'
 end
 
 # mark a random image as seen
-post '/experiment/:experiment_name/participant/:user_id/random' do
-  content_type :json
-  headers \
-    "Access-Control-Allow-Origin"   => "*",
-    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
-  if participant
-    status 200
-    if participant[:num_random_subjects_available] >= 1
-      participant[:num_random_subjects_seen]+=1
-      participant[:num_random_subjects_available]-=1
-      participant.save
-      participant.to_json
-    else
-      halt 409, {'Content-Type' => 'application/json'}, { :error => "No more random subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
-    end
-  else
-    halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found in experiment #{params[:experiment_name]}" }.to_json
-  end
-end
+# post '/experiment/:experiment_name/participant/:user_id/random' do
+#   content_type :json
+#   headers \
+#     "Access-Control-Allow-Origin"   => "*",
+#     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
+#   participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
+#   if participant
+#     status 200
+#     if participant[:num_random_subjects_available] >= 1
+#       participant[:num_random_subjects_seen]+=1
+#       participant[:num_random_subjects_available]-=1
+#       participant.save
+#       participant.to_json
+#     else
+#       halt 409, {'Content-Type' => 'application/json'}, { :error => "No more random subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
+#     end
+#   else
+#     halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found in experiment #{params[:experiment_name]}" }.to_json
+#   end
+# end
 
-# mark an insertion image as seen
-post '/experiment/:experiment_name/participant/:user_id/insertion/:subject_id' do
+# mark an image as seen
+post '/experiment/:experiment_name/participant/:user_id/:subject_id' do
   content_type :json
   headers \
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   participant = Participant.where( experiment_name:params[:experiment_name] , user_id:params[:user_id] ).first
   if participant
-    if participant[:insertion_subjects_available].size >= 1
-      if participant[:insertion_subjects_available].include? params[:subject_id]
+    found = false
+    no_blanks = false
+    no_non_blanks = false
+    if participant[:blank_subjects_available].size >= 1
+      if participant[:blank_subjects_available].include? params[:subject_id]
+        found = true
         status 200
-        participant.pull(insertion_subjects_available:params[:subject_id])
-        if participant[:insertion_subjects_seen].size == 0
-          participant[:insertion_subjects_seen] = [params[:subject_id]]
+        participant.pull(blank_subjects_available:params[:subject_id])
+        if participant[:blank_subjects_seen].size == 0
+          participant[:blank_subjects_seen] = [params[:subject_id]]
         else
-          participant.add_to_set(insertion_subjects_seen:params[:subject_id].to_s)
+          participant.add_to_set(blank_subjects_seen:params[:subject_id].to_s)
         end
         participant.save
         participant.to_json
-      else
-        halt 409, {'Content-Type' => 'application/json'}, { :error => "#{params[:subject_id]} is not an available subject for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
       end
     else
-      halt 409, {'Content-Type' => 'application/json'}, { :error => "No more random subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
+      no_blanks = true
+    end
+    if !found and participant[:non_blank_subjects_available].size >= 1
+      if participant[:non_blank_subjects_available].include? params[:subject_id]
+        found = true
+        status 200
+        participant.pull(non_blank_subjects_available:params[:subject_id])
+        if participant[:non_blank_subjects_seen].size == 0
+          participant[:non_blank_subjects_seen] = [params[:subject_id]]
+        else
+          participant.add_to_set(non_blank_subjects_seen:params[:subject_id].to_s)
+        end
+      else
+        no_non_blanks = true
+      end
+    end
+    if participant[:blank_subjects_available].size == 0 and participant[:non_blank_subjects_available].size == 0
+      experiment = get_experiment(params[:experiment_name]).new
+      experiment.class.deactivateParticipant(participant)
+      params[:message] = "#{params[:user_id]} has completed experiment #{params[:experiment_name]}."
+      participant.attributes.each do |attr_name, attr_value|
+        params[attr_name]=attr_value unless attr_name=="_id"
+      end
+    end
+    if found
+      participant.save
+      participant.to_json
+    else
+      if no_blanks and no_non_blanks
+        halt 409, {'Content-Type' => 'application/json'}, { :error => "#{params[:subject_id]} is not an available subject for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
+      else
+        halt 409, {'Content-Type' => 'application/json'}, { :error => "No more subjects available for participant #{params[:user_id]} in experiment #{params[:experiment_name]}", :participant => participant }.to_json
+      end
     end
   else
     halt 404, {'Content-Type' => 'application/json'}, { :error => "Participant #{params[:user_id]} not found in experiment #{params[:experiment_name]}" }.to_json
