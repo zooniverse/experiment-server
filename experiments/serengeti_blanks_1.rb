@@ -146,7 +146,7 @@ module PlanOut
                 do_not_repeat_these.push blankSubjectID
               end
             end
-            participant[:blank_subjects_available].push(blankSubjectID)
+            participant[:blank_subjects_available].push("#{blankSubjectID}:blank")
           end
           for i in 1..non_blanks
             nonBlankSubjectID = SerengetiBlanksExperiment1.getNonBlankSubjectID()
@@ -156,7 +156,7 @@ module PlanOut
                 do_not_repeat_these.push nonBlankSubjectID
               end
             end
-            participant[:non_blank_subjects_available].push(nonBlankSubjectID)
+            participant[:non_blank_subjects_available].push("#{nonBlankSubjectID}:non-blank")
           end
         end
         participant.save
