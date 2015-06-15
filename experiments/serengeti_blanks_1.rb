@@ -139,23 +139,19 @@ module PlanOut
           non_blanks = SerengetiBlanksExperiment1.getNumberOfNonBlanks(cohort)
           do_not_repeat_these = []
           for i in 1..blanks
-            blankSubjectID = SerengetiBlanksExperiment1.getBlankSubjectID()
+            blankSubjectID = nil
             until blankSubjectID.present? and !do_not_repeat_these.include? blankSubjectID do
               blankSubjectID = SerengetiBlanksExperiment1.getBlankSubjectID()
-              if !do_not_repeat_these.include? blankSubjectID
-                do_not_repeat_these.push blankSubjectID
-              end
             end
+            do_not_repeat_these.push blankSubjectID
             participant[:blank_subjects_available].push("#{blankSubjectID}:blank")
           end
           for i in 1..non_blanks
-            nonBlankSubjectID = SerengetiBlanksExperiment1.getNonBlankSubjectID()
+            nonBlankSubjectID = nil
             until nonBlankSubjectID.present? and !do_not_repeat_these.include? nonBlankSubjectID do
               nonBlankSubjectID = SerengetiBlanksExperiment1.getNonBlankSubjectID()
-              if !do_not_repeat_these.include? nonBlankSubjectID
-                do_not_repeat_these.push nonBlankSubjectID
-              end
             end
+            do_not_repeat_these.push nonBlankSubjectID
             participant[:non_blank_subjects_available].push("#{nonBlankSubjectID}:non-blank")
           end
         end
