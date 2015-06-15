@@ -262,7 +262,7 @@ end
 #   end
 # end
 
-# mark an image as seen
+# mark an image as seen - accepts prefix not necessarily whole subject ID.
 post '/experiment/:experiment_name/participant/:user_id/:subject_id' do
   content_type :json
   headers \
@@ -274,14 +274,23 @@ post '/experiment/:experiment_name/participant/:user_id/:subject_id' do
     no_blanks = false
     no_non_blanks = false
     if participant[:blank_subjects_available].size >= 1
-      if participant[:blank_subjects_available].include? params[:subject_id]
+      if participant[:blank_subjects_available].any? { |s| s.include?(params[:subject_id]) }
         found = true
         status 200
-        participant.pull(blank_subjects_available:params[:subject_id])
-        if participant[:blank_subjects_seen].size == 0
-          participant[:blank_subjects_seen] = [params[:subject_id]]
-        else
-          participant.add_to_set(blank_subjects_seen:params[:subject_id].to_s)
+        pattern = Regexp.quote(params[:subject_id])
+        idx = participant[:blank_subjects_available].index{|s| s =~ /^#{pattern}/ }
+        if idx.present?
+          subject_matched = participant[:blank_subjects_available][idx]
+          updated_blanks_available = participant[:blank_subjects_available].clone
+          updated_blanks_available.delete_if {|s| s =~ /^#{pattern}/ }
+          participant.unset(:blank_subjects_available)
+          participant.add_to_set(blank_subjects_available:updated_blanks_available)
+          participant.save
+          if participant[:blank_subjects_seen].size == 0
+            participant[:blank_subjects_seen] = [subject_matched]
+          else
+            participant.add_to_set(blank_subjects_seen:subject_matched.to_s)
+          end
         end
         participant.save
         participant.to_json
@@ -290,15 +299,26 @@ post '/experiment/:experiment_name/participant/:user_id/:subject_id' do
       no_blanks = true
     end
     if !found and participant[:non_blank_subjects_available].size >= 1
-      if participant[:non_blank_subjects_available].include? params[:subject_id]
+      if participant[:non_blank_subjects_available].any? { |s| s.include?(params[:subject_id]) }
         found = true
         status 200
-        participant.pull(non_blank_subjects_available:params[:subject_id])
-        if participant[:non_blank_subjects_seen].size == 0
-          participant[:non_blank_subjects_seen] = [params[:subject_id]]
-        else
-          participant.add_to_set(non_blank_subjects_seen:params[:subject_id].to_s)
+        pattern = Regexp.quote(params[:subject_id])
+        idx = participant[:non_blank_subjects_available].index{|s| s =~ /^#{pattern}/ }
+        if idx.present?
+          subject_matched = participant[:non_blank_subjects_available][idx]
+          updated_non_blanks_available = participant[:non_blank_subjects_available].clone
+          updated_non_blanks_available.delete_if {|s| s =~ /^#{pattern}/ }
+          participant.unset(:non_blank_subjects_available)
+          participant.add_to_set(non_blank_subjects_available:updated_non_blanks_available)
+          participant.save
+          if participant[:non_blank_subjects_seen].size == 0
+            participant[:non_blank_subjects_seen] = [subject_matched]
+          else
+            participant.add_to_set(non_blank_subjects_seen:subject_matched.to_s)
+          end
         end
+        participant.save
+        participant.to_json
       else
         no_non_blanks = true
       end
