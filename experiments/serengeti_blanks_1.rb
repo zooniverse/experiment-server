@@ -8,9 +8,9 @@ module PlanOut
     @@SUBJECTS_IN_SET = 70  # how many subjects to include in the experiment set
     @@COHORT_00 = "0"
     @@COHORT_20 = "20"
-    @@COHORT_40 = "20"
-    @@COHORT_60 = "20"
-    @@COHORT_80 = "20"
+    @@COHORT_40 = "40"
+    @@COHORT_60 = "60"
+    @@COHORT_80 = "80"
     @@COHORT_INELIGIBLE = "ineligible"
     @@COHORT_CONTROL = "control"
     @@DB_HOST = 'zooniverse-db1.cezuuccr9cw6.us-east-1.rds.amazonaws.com'
