@@ -90,6 +90,7 @@ post '/users/:user_id/interventions' do
                                        intervention_type:     params["intervention_type"],
                                        text_message:          params["text_message"],
                                        cohort_id:             params["cohort_id"],
+                                       preconfigured_id:      params["preconfigured_id"],
                                        experiment_name:       params["experiment_name"],
                                        time_duration:         params["time_duration"],
                                        presentation_duration: params["presentation_duration"],
@@ -98,7 +99,11 @@ post '/users/:user_id/interventions' do
                                        details:               params["details"]
                                        })
   status 500 unless intervention
-  intervention.to_json
+  if intervention.valid?
+    intervention.to_json
+  else
+    halt 500, {'Content-Type' => 'application/json'}, { :errors => intervention.errors.messages }.to_json
+  end
 end
 
 get '/interventions/:intervention_id' do
