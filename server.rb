@@ -85,7 +85,6 @@ post '/users/:user_id/interventions' do
   headers \
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  puts params
   intervention  = Intervention.create({user_id:               params["user_id"],
                                        project:               params["project"],
                                        intervention_type:     params["intervention_type"],
