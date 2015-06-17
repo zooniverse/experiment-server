@@ -26,28 +26,32 @@ To register an intervention you need to send a POST request with the following d
 
     {
       "project":"galaxy_zoo",
+      "experiment_name":"name of experiment",
+      "preconfigured_id":1,
       "intervention_type":"prompt user about talk",
       "text_message":"please return",
       "cohort_id":1,
       "time_duration":60,
       "presentation_duration":20,
       "intervention_channel": "web model",
-      "take_action" : "after_next_classification"
+      "take_action" : "after_next_classification",
+      "state": "active"
     }
 
 - project : is the project on which the intervention should be taken
 - intervention_type: the name of the intervention 
+- preconfigured_id: the id of the message to display (currently 1, 2 or 3 only)
+- experiment_name: the name of the experiment
 - text_message : an optional text message to send to the user
-- cohort_id    : used along with a planout plan to select aditional split properties for the user
+- cohort_id    : used along with a planout plan to select additional split properties for the user
 - time_duration: how long does the intervention remain active. If the user does not see the intervention in this time the intervention retires.
 - presentation_duration: how long does the message stay on screen. 
 - intervention_channel : how should the intervention be delivered
-- take_action : at what point in a users experince should the intervention be presented
-
+- take_action : at what point in a user's experience should the intervention be presented
 
 On POSTing an intervention the API will return that intervention along with an ID which allows researchers to poll for the current state of the intervention. 
 
-#Example endponts 
+#Example endpoints 
 
 ## Create intervention 
 See [here](https://github.com/zooniverse/ZooniverseExperimentServer/blob/master/bin/example_intervention_post.rb) for an example of creating an intervention 
