@@ -21,6 +21,7 @@ While planout provides an elegant way to run static A/B splits, often what we ne
 - GET  /users/:user_id/interventions  will return all active interventions for a given user 
 - POST /users/:user_id/interventions  will register an intervention for a user (see later for intervention format)
 - GET /interventions/:intervention_id allows you to poll the status of an intervention. 
+- POST /interventions/:intervention_id/detected allows you to mark an intervention as detected
 - POST /interventions/:intervention_id/delivered allows you to mark an intervention as delivered
 - POST /interventions/:intervention_id/dismissed allows you to mark an intervention as dismissed
 - POST /interventions/:intervention_id/completed allows you to mark an intervention as completed
@@ -47,11 +48,11 @@ To register an intervention you need to send a POST request with the following d
 - experiment_name: the name of the experiment
 - text_message : an optional text message to send to the user
 - cohort_id    : used along with a planout plan to select additional split properties for the user
-- time_duration: how long does the intervention remain active. If the user does not see the intervention in this time the intervention retires.
-- presentation_duration: how long does the message stay on screen. 
+- time_duration: how long does the intervention remain active (in seconds). If the user does not see the intervention in this time the intervention is retired server-side before any client can see it (moves from active to inactive state)
+- presentation_duration: how long does the message stay on screen (in seconds) 
 - intervention_channel : how should the intervention be delivered
 - take_action : at what point in a user's experience should the intervention be presented
-- state: the state of the intervention: initially "active", until the first GET after time_duration has passed, at which point it becomes "inactive". An active intervention will be set to "delivered" when the client reports delivery. Additionally a delivered intervention may be set to "dismissed" if the user dismissed it before the presentation_duration has elapsed, and the client can set it to "completed" once the presentation_duration has elapsed.
+- state: the state of the intervention: initially "active", until the first GET after time_duration has passed, at which point it becomes "inactive". An active intervention will be set to "detected" when the client reports detection, and "delivered" when the client reports delivery. Additionally a delivered intervention may be set to "dismissed" if the user dismissed it before the presentation_duration has elapsed, and the client can set it to "completed" once the presentation_duration has elapsed.
 
 On POSTing an intervention the API will return that intervention along with an ID which allows researchers to poll for the current state of the intervention. 
 
