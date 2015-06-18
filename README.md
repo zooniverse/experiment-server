@@ -23,6 +23,7 @@ While planout provides an elegant way to run static A/B splits, often what we ne
 - GET /interventions/:intervention_id allows you to poll the status of an intervention. 
 - POST /interventions/:intervention_id/delivered allows you to mark an intervention as delivered
 - POST /interventions/:intervention_id/dismissed allows you to mark an intervention as dismissed
+- POST /interventions/:intervention_id/completed allows you to mark an intervention as completed
 
 To register an intervention you need to send a POST request with the following data to the server: 
 
@@ -50,7 +51,7 @@ To register an intervention you need to send a POST request with the following d
 - presentation_duration: how long does the message stay on screen. 
 - intervention_channel : how should the intervention be delivered
 - take_action : at what point in a user's experience should the intervention be presented
-- state: the state of the intervention: initially "active", until the first GET after time_duration has passed, at which point it becomes "inactive". An active intervention will be set to "delivered" when the client reports delivery. Additionally a delivered intervention may be set to "dismissed" if the user dismissed it before the presentation_duration has elapsed.
+- state: the state of the intervention: initially "active", until the first GET after time_duration has passed, at which point it becomes "inactive". An active intervention will be set to "delivered" when the client reports delivery. Additionally a delivered intervention may be set to "dismissed" if the user dismissed it before the presentation_duration has elapsed, and the client can set it to "completed" once the presentation_duration has elapsed.
 
 On POSTing an intervention the API will return that intervention along with an ID which allows researchers to poll for the current state of the intervention. 
 

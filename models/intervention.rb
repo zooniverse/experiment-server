@@ -22,7 +22,7 @@ class Intervention
   validates_presence_of :experiment_name, message: "Experiment name must be specified"
   validates_numericality_of :presentation_duration, message: "Presentation duration must be an integer value"
   validates_numericality_of :time_duration, message: "Time duration must be an integer value"
-  validates_inclusion_of :state , in: [ "active", "inactive", "delivered", "dismissed" ], message: "Not a valid state. Valid states are: active, inactive, delivered, dismissed"
+  validates_inclusion_of :state , in: [ "active", "inactive", "delivered", "dismissed" , "completed" ], message: "Not a valid state. Valid states are: active, inactive, delivered, dismissed, completed"
 # validates_inclusion_of :intervention_type, in: [ "short" ], message: "Not a valid intervention type"
 # validates_inclusion_of :intervention_channel, in: [ "web message", "web modal", "email" ], message: "Not a valid channel"
 # validates_inclusion_of :take_action , in: [ "after_next_classification", "before_next_classification", "now" ], message: "Not a valid action"
@@ -48,5 +48,9 @@ class Intervention
 
   def dismissed!
     update_attributes! state: "dismissed"
+  end
+
+  def completed!
+    update_attributes! state: "completed"
   end
 end
