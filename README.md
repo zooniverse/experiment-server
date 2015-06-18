@@ -21,21 +21,23 @@ While planout provides an elegant way to run static A/B splits, often what we ne
 - GET  /users/:user_id/interventions  will return all active interventions for a given user 
 - POST /users/:user_id/interventions  will register an intervention for a user (see later for intervention format)
 - GET /interventions/:intervention_id allows you to poll the status of an intervention. 
+- POST /interventions/:intervention_id/delivered allows you to mark an intervention as delivered
+- POST /interventions/:intervention_id/dismissed allows you to mark an intervention as dismissed
 
 To register an intervention you need to send a POST request with the following data to the server: 
 
     {
       "project":"galaxy_zoo",
       "experiment_name":"name of experiment",
+      "cohort_id":1,
       "preconfigured_id":1,
+      "state": "active"
       "intervention_type":"prompt user about talk",
       "text_message":"please return",
-      "cohort_id":1,
       "time_duration":60,
       "presentation_duration":20,
       "intervention_channel": "web model",
       "take_action" : "after_next_classification",
-      "state": "active"
     }
 
 - project : is the project on which the intervention should be taken
@@ -48,6 +50,7 @@ To register an intervention you need to send a POST request with the following d
 - presentation_duration: how long does the message stay on screen. 
 - intervention_channel : how should the intervention be delivered
 - take_action : at what point in a user's experience should the intervention be presented
+- state: the state of the intervention: initially "active", until the first GET after time_duration has passed, at which point it becomes "inactive". An active intervention will be set to "delivered" when the client reports delivery. Additionally a delivered intervention may be set to "dismissed" if the user dismissed it before the presentation_duration has elapsed.
 
 On POSTing an intervention the API will return that intervention along with an ID which allows researchers to poll for the current state of the intervention. 
 

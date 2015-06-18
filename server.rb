@@ -116,8 +116,8 @@ get '/interventions/:intervention_id' do
   intervention.to_json
 end
 
-# mark an intervention as delivered
-post '/interventions/:intervention_id' do
+# mark an intervention as delivered - body is ignored
+post '/interventions/:intervention_id/delivered' do
   content_type :json
   headers \
     "Access-Control-Allow-Origin"   => "*",
@@ -128,6 +128,20 @@ post '/interventions/:intervention_id' do
   intervention.save
   intervention.to_json
 end
+
+# mark an intervention as dismissed - body is ignored
+post '/interventions/:intervention_id/dismissed' do
+  content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
+  intervention = Intervention.find(params[:intervention_id])
+  status 500 unless intervention
+  intervention.dismissed!
+  intervention.save
+  intervention.to_json
+end
+
 
 ###### Experimental Participant API
 ###### At the moment this only works for an experiment based around maintaining a set list of random & inserted subjects per user, but could be generalized.
