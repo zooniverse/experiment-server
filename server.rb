@@ -68,6 +68,55 @@ end
 
 ###### Intervention API
 
+# helper method for checking, creating and updating opt out for a user
+# if set_opted_out is true, any unset or false value for "opted out" will be overwritten and set to true
+# a bundle of data explaining what was found and what was done is returned
+#
+def check_opt_out_settings(user_id,experiment_name,project,set_opted_out = false)
+  bundle = { :found => false, :created => false, :updated => false, :errors => nil, :status => 200, :data => nil }
+  bundle[:found] = InterventionOptOut.find_by(:user_id => user_id, :experiment_name => experiment_name, :project => project)
+  if bundle[:found]
+    intervention_opt_out = bundle[:found]
+    bundle[:found] = true
+    bundle[:data] = intervention_opt_out.attributes
+  else
+    bundle[:found] = false
+    intervention_opt_out = InterventionOptOut.create(:user_id => user_id, :experiment_name => experiment_name, :project => project)
+    ok = intervention_opt_out.save
+    if intervention_opt_out.errors.size > 0
+      bundle[:status] = 400
+      bundle[:errors] = intervention_opt_out.errors
+    else
+      if ok
+        bundle[:status] = 201
+        bundle[:created] = true
+        bundle[:data] = intervention_opt_out.attributes
+      else
+        bundle[:status] = 500
+      end
+    end
+  end
+  if bundle[:errors].nil? and set_opted_out and intervention_opt_out.present? and not intervention_opt_out["opted_out"]
+    if intervention_opt_out.optout! and intervention_opt_out.save
+      bundle[:status] = 202
+      bundle[:updated] = true
+      bundle[:data] = intervention_opt_out.attributes
+    else
+      bundle[:status] = 500
+    end
+  end
+  return bundle
+end
+
+def clean_opt_out_results(opt_out_results)
+  opt_out_results.delete(:status)
+  opt_out_results.delete(:data) if opt_out_results[:data].nil?
+  opt_out_results.delete(:errors) if opt_out_results[:errors].nil?
+  if opt_out_results[:data].present? and opt_out_results[:data]["_id"].present?
+    opt_out_results[:data].delete("_id")
+  end
+end
+
 get '/users/:user_id/interventions' do
   content_type :json
   headers \
@@ -148,7 +197,6 @@ post '/interventions/:intervention_id/detected' do
 end
 
 # mark an intervention as dismissed - body is ignored
-# this will also start tracking the countdown to asking the user if they want permanent opt-out
 post '/interventions/:intervention_id/dismissed' do
   content_type :json
   headers \
@@ -159,7 +207,6 @@ post '/interventions/:intervention_id/dismissed' do
   intervention.dismissed!
   intervention.save
   intervention_opt_out = InterventionOptOut.find_or_create_by(:user_id => intervention.user_id, :experiment_name => intervention.experiment_name, :project => intervention.project)
-  intervention_opt_out.increment!
   intervention_opt_out.save
   response = {
         :intervention => intervention,
@@ -174,21 +221,10 @@ get '/users/:user_id/optout' do
   headers \
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  found = InterventionOptOut.find_by(:user_id => params[:user_id], :experiment_name => params[:experiment_name], :project => params[:project])
-  if found
-    intervention_opt_out = found
-    { :found => true, :created => false, :data => intervention_opt_out }.to_json
-  else
-    intervention_opt_out = InterventionOptOut.create(:user_id => params[:user_id], :experiment_name => params[:experiment_name], :project => params[:project])
-    intervention_opt_out.save
-    if intervention_opt_out.errors.size > 0
-      status 400
-      { :found => false, :created => false,  :errors => intervention_opt_out.errors }.to_json
-    else
-      status 201
-      { :found => false, :created => true,  :data => intervention_opt_out }.to_json
-    end
-  end
+  opt_out_results = check_opt_out_settings(params[:user_id],params[:experiment_name],params[:project])
+  status opt_out_results[:status]
+  clean_opt_out_results(opt_out_results)
+  opt_out_results.to_json
 end
 
 # mark an intervention participant as opted out - params must contain project and experiment name
@@ -197,36 +233,10 @@ post '/users/:user_id/optout' do
   headers \
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  created = false
-  found = InterventionOptOut.find_by(:user_id => params[:user_id], :experiment_name => params[:experiment_name], :project => params[:project])
-  if found
-    intervention_opt_out = found
-    found = true
-  else
-    found = false
-    intervention_opt_out = InterventionOptOut.create(:user_id => params[:user_id], :experiment_name => params[:experiment_name], :project => params[:project])
-    intervention_opt_out.save
-    if intervention_opt_out.errors.size > 0
-      return { :found => false, :created => false, :updated => false, :errors => intervention_opt_out.errors }.to_json
-    else
-      created = true
-    end
-  end
-  if not intervention_opt_out["opted_out"]
-    intervention_opt_out.optout!
-    ok = intervention_opt_out.save
-    updated = true if ok
-  else
-    ok = true
-    updated = false
-  end
-  if ok
-    status 202
-    { :found => found, :created => created, :updated => updated, :data => intervention_opt_out }.to_json
-  else
-    status 500
-    { :found => found, :created => false, :updated => false, :errors => intervention_opt_out.errors }.to_json
-  end
+  opt_out_results = check_opt_out_settings(params[:user_id],params[:experiment_name],params[:project],true)
+  status opt_out_results[:status]
+  clean_opt_out_results(opt_out_results)
+  opt_out_results.to_json
 end
 
 # mark an intervention as completed - body is ignored
