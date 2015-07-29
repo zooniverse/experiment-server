@@ -133,16 +133,28 @@ get '/users/:user_id/interventions' do
   if interventions.length == 0
     halt 404, {'Content-Type' => 'application/json'}, { :error => "No interventions found for user #{params[:user_id]}" }.to_json
   else
-    # TODO whenever we create a second experiment, we'll need to expand this to cope with multiple opt out settings for different experiments.
-    first_intervention = interventions[0]
-    experiment_name = first_intervention[:experiment_name]
-    project = first_intervention[:project]
-    opt_out_results = check_opt_out_settings(params[:user_id],experiment_name,project)
-    status opt_out_results[:created] ? 201 : 200
-    clean_opt_out_results(opt_out_results)
+    opt_out_pairs = []
+    interventions.each { |x|
+      new_pair = {
+        :experiment_name => x[:experiment_name] ,
+        :project => x[:project]
+      }
+      if not opt_out_pairs.any?{|p| p[:experiment_name] == x[:experiment_name] and p[:project] == x[:project]}
+        opt_out_pairs.push(new_pair)
+      end
+    }
+    opt_outs = []
+    any_creates = false
+    opt_out_pairs.each { |p|
+      opt_out_results = check_opt_out_settings(params[:user_id],p[:experiment_name],p[:project])
+      any_creates = true if opt_out_results[:created]
+      clean_opt_out_results(opt_out_results)
+      opt_outs.push (opt_out_results)
+    }
+    status any_creates ? 201 : 200
     {
       :interventions => interventions,
-      :opt_out => opt_out_results
+      :opt_outs => opt_outs
     }.to_json
   end
 end
