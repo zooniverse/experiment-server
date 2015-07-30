@@ -139,15 +139,17 @@ get '/users/:user_id/interventions' do
     suppressed_count = 0
     if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS
       interventions = interventions.clone
+      interventions_filtered = []
       interventions.each do |x|
         opt_out_results = check_opt_out_settings(params[:user_id],x[:experiment_name],x[:project])
         if opt_out_results[:data][:opted_out]
-          x.delete()
           suppressed_count += 1
+        else
+          interventions_filtered.push(x)
         end
       end
       {
-        :interventions => interventions,
+        :interventions => interventions_filtered,
         :suppressed_interventions => suppressed_count
       }.to_json
     else
