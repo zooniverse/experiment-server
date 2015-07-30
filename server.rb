@@ -2,8 +2,6 @@ require 'sinatra'
 require 'json'
 require_relative 'environment'
 
-ADMIN_ENABLED = true
-
 def active_experiments
   experiments = PlanOut.constants.collect{|experiment| experiment.to_s}.select{|experiment_name| experiment_name.include? "Experiment" }
   experiments - ["SimpleExperiment", "Experiment"]
@@ -67,6 +65,11 @@ post '/experiment/:experiment_name/log/:log_type' do
 end
 
 ###### Intervention API
+
+# if set to true, then opt outs are handled silently: interventions are hidden if the user is opted out for
+# that experiment, and opt out details are not returned except from the opt out methods. setting this to false
+# may be useful during development.
+SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS = true
 
 # helper method for checking, creating and updating opt out for a user
 # if set_opted_out is true, any unset or false value for "opted out" will be overwritten and set to true
@@ -133,29 +136,46 @@ get '/users/:user_id/interventions' do
   if interventions.length == 0
     halt 404, {'Content-Type' => 'application/json'}, { :error => "No interventions found for user #{params[:user_id]}" }.to_json
   else
-    opt_out_pairs = []
-    interventions.each { |x|
-      new_pair = {
-        :experiment_name => x[:experiment_name] ,
-        :project => x[:project]
-      }
-      if not opt_out_pairs.any?{|p| p[:experiment_name] == x[:experiment_name] and p[:project] == x[:project]}
-        opt_out_pairs.push(new_pair)
+    suppressed_count = 0
+    if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS
+      interventions = interventions.clone
+      interventions.each do |x|
+        opt_out_results = check_opt_out_settings(params[:user_id],x[:experiment_name],x[:project])
+        if opt_out_results[:data][:opted_out]
+          x.delete()
+          suppressed_count += 1
+        end
       end
-    }
-    opt_outs = []
-    any_creates = false
-    opt_out_pairs.each { |p|
-      opt_out_results = check_opt_out_settings(params[:user_id],p[:experiment_name],p[:project])
-      any_creates = true if opt_out_results[:created]
-      clean_opt_out_results(opt_out_results)
-      opt_outs.push (opt_out_results)
-    }
-    status any_creates ? 201 : 200
-    {
-      :interventions => interventions,
-      :opt_outs => opt_outs
-    }.to_json
+      {
+        :interventions => interventions,
+        :suppressed_interventions => suppressed_count
+      }.to_json
+    else
+      opt_out_pairs = []
+      interventions.each { |x|
+        new_pair = {
+          :experiment_name => x[:experiment_name] ,
+          :project => x[:project]
+        }
+        if not opt_out_pairs.any?{|p| p[:experiment_name] == x[:experiment_name] and p[:project] == x[:project]}
+          opt_out_pairs.push(new_pair)
+        end
+      }
+      opt_outs = []
+      any_creates = false
+      opt_out_pairs.each { |p|
+        opt_out_results = check_opt_out_settings(params[:user_id],p[:experiment_name],p[:project])
+        any_creates = true if opt_out_results[:created]
+        clean_opt_out_results(opt_out_results)
+        opt_outs.push (opt_out_results)
+      }
+      status any_creates ? 201 : 200
+      {
+        :interventions => interventions,
+        :opt_outs => opt_outs,
+        :suppressed_interventions => suppressed_count
+      }.to_json
+    end
   end
 end
 
@@ -181,9 +201,16 @@ post '/users/:user_id/interventions' do
     opt_out_results = check_opt_out_settings(params[:user_id],params[:experiment_name],params[:project])
     status opt_out_results[:created] ? 201 : 200
     clean_opt_out_results(opt_out_results)
+    will_be_suppressed = false
+    if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS
+      if opt_out_results[:data][:opted_out]
+        will_be_suppressed = true
+      end
+    end
     {
       :intervention => intervention,
-      :opt_out => opt_out_results
+      :opt_out => opt_out_results,
+      :will_be_suppressed => will_be_suppressed
     }.to_json
   else
     halt 500, {'Content-Type' => 'application/json'}, { :errors => intervention.errors.messages }.to_json
@@ -198,6 +225,9 @@ get '/interventions/:intervention_id' do
   intervention = Intervention.find(params[:intervention_id])
   if intervention
     opt_out_results = check_opt_out_settings(intervention[:user_id],intervention[:experiment_name],intervention[:project])
+    if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS and opt_out_results[:data][:opted_out]
+      halt 404, {'Content-Type' => 'application/json'}, { :error => "Intervention #{params[:intervention_id]} exists but was suppressed due to user opt-out" }.to_json
+    end
     status opt_out_results[:created] ? 201 : 200
     clean_opt_out_results(opt_out_results)
     {
@@ -209,22 +239,21 @@ get '/interventions/:intervention_id' do
   end
 end
 
-# mark an intervention as delivered - body is ignored
-post '/interventions/:intervention_id/delivered' do
-  content_type :json
-  headers \
-    "Access-Control-Allow-Origin"   => "*",
-    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  intervention = Intervention.find(params[:intervention_id])
+def update_intervention(intervention_id,method_to_call)
+  intervention = Intervention.find(intervention_id)
   if intervention
-    intervention.delivered!
+    opt_out_results = check_opt_out_settings(intervention[:user_id],intervention[:experiment_name],intervention[:project])
+    if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS and opt_out_results[:data][:opted_out]
+      halt 405, {'Content-Type' => 'application/json'}, { :error => "Modifying intervention #{params[:intervention_id]} is disallowed due to user opt-out" }.to_json
+    end
+    intervention.send method_to_call
     if intervention.save
-      opt_out_results = check_opt_out_settings(intervention[:user_id],intervention[:experiment_name],intervention[:project])
       status opt_out_results[:created] ? 201 : 200
       clean_opt_out_results(opt_out_results)
       {
         :intervention => intervention,
-        :opt_out => opt_out_results
+        :opt_out => opt_out_results,
+        :will_be_suppressed => false
       }.to_json
     else
       halt 500, {'Content-Type' => 'application/json'}, { :error => "Could not update intervention #{params[:intervention_id]}" }.to_json
@@ -232,6 +261,15 @@ post '/interventions/:intervention_id/delivered' do
   else
     halt 404, {'Content-Type' => 'application/json'}, { :error => "Intervention #{params[:intervention_id]} not found" }.to_json
   end
+end
+
+# mark an intervention as delivered - body is ignored
+post '/interventions/:intervention_id/delivered' do
+  content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
+  update_intervention(params[:intervention_id],:delivered!)
 end
 
 # mark an intervention as detected - body is ignored
@@ -240,23 +278,7 @@ post '/interventions/:intervention_id/detected' do
   headers \
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  intervention = Intervention.find(params[:intervention_id])
-  if intervention
-    intervention.detected!
-    if intervention.save
-      opt_out_results = check_opt_out_settings(intervention[:user_id],intervention[:experiment_name],intervention[:project])
-      status opt_out_results[:created] ? 201 : 200
-      clean_opt_out_results(opt_out_results)
-      {
-        :intervention => intervention,
-        :opt_out => opt_out_results
-      }.to_json
-    else
-      halt 500, {'Content-Type' => 'application/json'}, { :error => "Could not update intervention #{params[:intervention_id]}" }.to_json
-    end
-  else
-    halt 404, {'Content-Type' => 'application/json'}, { :error => "Intervention #{params[:intervention_id]} not found" }.to_json
-  end
+  update_intervention(params[:intervention_id],:detected!)
 end
 
 # mark an intervention as dismissed - body is ignored
@@ -265,23 +287,7 @@ post '/interventions/:intervention_id/dismissed' do
   headers \
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  intervention = Intervention.find(params[:intervention_id])
-  if intervention
-    intervention.dismissed!
-    if intervention.save
-      opt_out_results = check_opt_out_settings(intervention[:user_id],intervention[:experiment_name],intervention[:project])
-      status opt_out_results[:created] ? 201 : 200
-      clean_opt_out_results(opt_out_results)
-      {
-        :intervention => intervention,
-        :opt_out => opt_out_results
-      }.to_json
-    else
-      halt 500, {'Content-Type' => 'application/json'}, { :error => "Could not update intervention #{params[:intervention_id]}" }.to_json
-    end
-  else
-    halt 404, {'Content-Type' => 'application/json'}, { :error => "Intervention #{params[:intervention_id]} not found" }.to_json
-  end
+  update_intervention(params[:intervention_id],:detected!)
 end
 
 # mark an intervention as completed - body is ignored
@@ -290,23 +296,7 @@ post '/interventions/:intervention_id/completed' do
   headers \
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  intervention = Intervention.find(params[:intervention_id])
-  if intervention
-    intervention.completed!
-    if intervention.save
-      opt_out_results = check_opt_out_settings(intervention[:user_id],intervention[:experiment_name],intervention[:project])
-      status opt_out_results[:created] ? 201 : 200
-      clean_opt_out_results(opt_out_results)
-      {
-        :intervention => intervention,
-        :opt_out => opt_out_results
-      }.to_json
-    else
-      halt 500, {'Content-Type' => 'application/json'}, { :error => "Could not update intervention #{params[:intervention_id]}" }.to_json
-    end
-  else
-    halt 404, {'Content-Type' => 'application/json'}, { :error => "Intervention #{params[:intervention_id]} not found" }.to_json
-  end
+  update_intervention(params[:intervention_id],:completed!)
 end
 
 # check opt out status for a user. if no record exists, a record marked as "not opted out" is created  - params must contain project and experiment name.
