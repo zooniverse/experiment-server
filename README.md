@@ -18,15 +18,15 @@ New experiments will be accepted using pull requests.
 
 While planout provides an elegant way to run static A/B splits, often what we need is an intervention based on external models or data. The intervention API allows third parties to register interventions to be taken for a given user. 
 
-- GET  /users/:user_id/interventions will return all active interventions for a given user, except those for experiments which the user has been opted out of
-- POST /users/:user_id/interventions will register an intervention for a user (see later for intervention format)
-- GET /interventions/:intervention_id allows you to poll the status of an intervention. 
-- POST /interventions/:intervention_id/detected allows you to mark an intervention as detected
-- POST /interventions/:intervention_id/delivered allows you to mark an intervention as delivered
-- POST /interventions/:intervention_id/dismissed allows you to mark an intervention as dismissed
-- POST /interventions/:intervention_id/completed allows you to mark an intervention as completed
-- GET  /users/:user_id/optout will return the current opt out settings for the user for this experiment (project and experiment_name must be specified)
-- POST /users/:user_id/optout will opt out the user from the specified experiment (project and experiment_name must be specified). This means that any interventions posted to this experiment for this user will be suppressed and not returned or modifiable by the API.
+- `GET  /users/:user_id/interventions` will return all active interventions for a given user, except those for experiments which the user has been opted out of (these are represented by the `suppressed_interventions` count which is also returned, along with the user's opt out settings)
+- `POST /users/:user_id/interventions` will register an intervention for a user (see later for intervention format)
+- `GET /interventions/:intervention_id` allows you to poll the status of an intervention. It also shows the user's current opt out settings for this experiment.
+- `POST /interventions/:intervention_id/detected` allows you to mark an intervention as detected (provided the user is not opted out of that experiment)
+- `POST /interventions/:intervention_id/delivered` allows you to mark an intervention as delivered (provided the user is not opted out of that experiment)
+- `POST /interventions/:intervention_id/dismissed` allows you to mark an intervention as dismissed (provided the user is not opted out of that experiment)
+- `POST /interventions/:intervention_id/completed` allows you to mark an intervention as completed (provided the user is not opted out of that experiment)
+- `GET  /users/:user_id/optout` will return the current opt out settings for the user for this experiment (`project` and `experiment_name` must be specified)
+- `POST /users/:user_id/optout` will opt out the user from the specified experiment (`project` and `experiment_name` must be specified). This means that any interventions posted to this experiment for this user will be suppressed and not returned or modifiable by the API.
 
 
 To register an intervention you need to send a POST request with the following data to the server: 
