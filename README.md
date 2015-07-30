@@ -18,13 +18,16 @@ New experiments will be accepted using pull requests.
 
 While planout provides an elegant way to run static A/B splits, often what we need is an intervention based on external models or data. The intervention API allows third parties to register interventions to be taken for a given user. 
 
-- GET  /users/:user_id/interventions  will return all active interventions for a given user 
-- POST /users/:user_id/interventions  will register an intervention for a user (see later for intervention format)
+- GET  /users/:user_id/interventions will return all active interventions for a given user, except those for experiments which the user has been opted out of
+- POST /users/:user_id/interventions will register an intervention for a user (see later for intervention format)
 - GET /interventions/:intervention_id allows you to poll the status of an intervention. 
 - POST /interventions/:intervention_id/detected allows you to mark an intervention as detected
 - POST /interventions/:intervention_id/delivered allows you to mark an intervention as delivered
 - POST /interventions/:intervention_id/dismissed allows you to mark an intervention as dismissed
 - POST /interventions/:intervention_id/completed allows you to mark an intervention as completed
+- GET  /users/:user_id/optout will return the current opt out settings for the user for this experiment (project and experiment_name must be specified)
+- POST /users/:user_id/optout will opt out the user from the specified experiment (project and experiment_name must be specified). This means that any interventions posted to this experiment for this user will be suppressed and not returned or modifiable by the API.
+
 
 To register an intervention you need to send a POST request with the following data to the server: 
 
@@ -54,7 +57,7 @@ To register an intervention you need to send a POST request with the following d
 - take_action : at what point in a user's experience should the intervention be presented
 - state: the state of the intervention: initially "active", until the first GET after time_duration has passed, at which point it becomes "inactive". An active intervention will be set to "detected" when the client reports detection, and "delivered" when the client reports delivery. Additionally a delivered intervention may be set to "dismissed" if the user dismissed it before the presentation_duration has elapsed, and the client can set it to "completed" once the presentation_duration has elapsed.
 
-On POSTing an intervention the API will return that intervention along with an ID which allows researchers to poll for the current state of the intervention. 
+On POSTing an intervention the API will return that intervention along with an ID which allows researchers to poll for the current state of the intervention. It will also return information about the current user's opt out status, and a value showing whether or not the user's current opt out status will cause this intervention to be suppressed.
 
 #Example endpoints 
 
