@@ -134,7 +134,7 @@ get '/users/:user_id/interventions' do
   end
   interventions = results.all
   if interventions.length == 0
-    halt 200, {'Content-Type' => 'application/json'}, { :error => "No interventions found for user #{params[:user_id]}" }.to_json
+    halt 200, {'Content-Type' => 'application/json'}, { :interventions => [], :error => "No interventions found for user #{params[:user_id]}" }.to_json
   else
     suppressed_count = 0
     if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS
