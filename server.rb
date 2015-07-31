@@ -134,7 +134,7 @@ get '/users/:user_id/interventions' do
   end
   interventions = results.all
   if interventions.length == 0
-    halt 404, {'Content-Type' => 'application/json'}, { :error => "No interventions found for user #{params[:user_id]}" }.to_json
+    halt 200, {'Content-Type' => 'application/json'}, { :error => "No interventions found for user #{params[:user_id]}" }.to_json
   else
     suppressed_count = 0
     if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS
@@ -228,7 +228,7 @@ get '/interventions/:intervention_id' do
   if intervention
     opt_out_results = check_opt_out_settings(intervention[:user_id],intervention[:experiment_name],intervention[:project])
     if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS and opt_out_results[:data][:opted_out]
-      halt 404, {'Content-Type' => 'application/json'}, { :error => "Intervention #{params[:intervention_id]} exists but was suppressed due to user opt-out" }.to_json
+      halt 405, {'Content-Type' => 'application/json'}, { :error => "Intervention #{params[:intervention_id]} exists but was suppressed due to user opt-out" }.to_json
     end
     status opt_out_results[:created] ? 201 : 200
     clean_opt_out_results(opt_out_results)
@@ -337,7 +337,7 @@ get '/experiment/:experiment_name/participants' do
   if participants.length>0
     participants.all.to_json
   else
-    halt 404, {'Content-Type' => 'application/json'}, { :error => "No participants found for experiment #{params[:experiment_name]}" }.to_json
+    halt 200, {'Content-Type' => 'application/json'}, { :error => "No participants found for experiment #{params[:experiment_name]}" }.to_json
   end
 end
 
@@ -365,7 +365,7 @@ delete '/experiment/:experiment_name/participants' do
     Participant.where(experiment_name:params[:experiment_name]).delete
     { :message => "Successfully deleted all participants from experiment #{params[:experiment_name]}" }.to_json
   else
-    halt 404, {'Content-Type' => 'application/json'}, { :error => "No participants to delete for experiment #{params[:experiment_name]}" }.to_json
+    halt 405, {'Content-Type' => 'application/json'}, { :error => "No participants to delete for experiment #{params[:experiment_name]}" }.to_json
   end
 end
 
