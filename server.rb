@@ -2,8 +2,6 @@ require 'sinatra'
 require 'json'
 require_relative 'environment'
 
-ADMIN_ENABLED = true
-
 def active_experiments
   experiments = PlanOut.constants.collect{|experiment| experiment.to_s}.select{|experiment_name| experiment_name.include? "Experiment" }
   experiments - ["SimpleExperiment", "Experiment"]
@@ -68,6 +66,60 @@ end
 
 ###### Intervention API
 
+# if set to true, then opt outs are handled silently: interventions are hidden if the user is opted out for
+# that experiment, and opt out details are not returned except from the opt out methods. setting this to false
+# may be useful during development.
+SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS = true
+
+# helper method for checking, creating and updating opt out for a user
+# if set_opted_out is true, any unset or false value for "opted out" will be overwritten and set to true
+# a bundle of data explaining what was found and what was done is returned
+#
+def check_opt_out_settings(user_id,experiment_name,project,set_opted_out = false)
+  bundle = { :found => false, :created => false, :updated => false, :errors => nil, :status => 200, :data => nil }
+  bundle[:found] = InterventionOptOut.find_by(:user_id => user_id, :experiment_name => experiment_name, :project => project)
+  if bundle[:found]
+    intervention_opt_out = bundle[:found]
+    bundle[:found] = true
+    bundle[:data] = intervention_opt_out.attributes
+  else
+    bundle[:found] = false
+    intervention_opt_out = InterventionOptOut.create(:user_id => user_id, :experiment_name => experiment_name, :project => project)
+    ok = intervention_opt_out.save
+    if intervention_opt_out.errors.size > 0
+      bundle[:status] = 400
+      bundle[:errors] = intervention_opt_out.errors
+    else
+      if ok
+        bundle[:status] = 201
+        bundle[:created] = true
+        bundle[:data] = intervention_opt_out.attributes
+      else
+        bundle[:status] = 500
+      end
+    end
+  end
+  if bundle[:errors].nil? and set_opted_out and intervention_opt_out.present? and not intervention_opt_out["opted_out"]
+    if intervention_opt_out.optout! and intervention_opt_out.save
+      bundle[:status] = 202
+      bundle[:updated] = true
+      bundle[:data] = intervention_opt_out.attributes
+    else
+      bundle[:status] = 500
+    end
+  end
+  return bundle
+end
+
+def clean_opt_out_results(opt_out_results)
+  opt_out_results.delete(:status)
+  opt_out_results.delete(:data) if opt_out_results[:data].nil?
+  opt_out_results.delete(:errors) if opt_out_results[:errors].nil?
+  if opt_out_results[:data].present? and opt_out_results[:data]["_id"].present?
+    opt_out_results[:data].delete("_id")
+  end
+end
+
 get '/users/:user_id/interventions' do
   content_type :json
   headers \
@@ -75,9 +127,58 @@ get '/users/:user_id/interventions' do
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   results = Intervention.where( state: "active", user_id: params[:user_id])
   if params[:project]
-    results = results.where(project_name: params[:project])
+    results = results.where(project: params[:project])
   end
-  results.all.to_json
+  if params[:experiment_name]
+    results = results.where(experiment_name: params[:experiment_name])
+  end
+  interventions = results.all
+  if interventions.length == 0
+    halt 200, {'Content-Type' => 'application/json'}, { :interventions => [], :error => "No interventions found for user #{params[:user_id]}" }.to_json
+  else
+    suppressed_count = 0
+    if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS
+      interventions = interventions.clone
+      interventions_filtered = []
+      interventions.each do |x|
+        opt_out_results = check_opt_out_settings(params[:user_id],x[:experiment_name],x[:project])
+        if opt_out_results[:data][:opted_out]
+          suppressed_count += 1
+        else
+          interventions_filtered.push(x)
+        end
+      end
+      {
+        :interventions => interventions_filtered,
+        :suppressed_interventions => suppressed_count
+      }.to_json
+    else
+      opt_out_pairs = []
+      interventions.each { |x|
+        new_pair = {
+          :experiment_name => x[:experiment_name] ,
+          :project => x[:project]
+        }
+        if not opt_out_pairs.any?{|p| p[:experiment_name] == x[:experiment_name] and p[:project] == x[:project]}
+          opt_out_pairs.push(new_pair)
+        end
+      }
+      opt_outs = []
+      any_creates = false
+      opt_out_pairs.each { |p|
+        opt_out_results = check_opt_out_settings(params[:user_id],p[:experiment_name],p[:project])
+        any_creates = true if opt_out_results[:created]
+        clean_opt_out_results(opt_out_results)
+        opt_outs.push (opt_out_results)
+      }
+      status any_creates ? 201 : 200
+      {
+        :interventions => interventions,
+        :opt_outs => opt_outs,
+        :suppressed_interventions => suppressed_count
+      }.to_json
+    end
+  end
 end
 
 post '/users/:user_id/interventions' do
@@ -98,9 +199,21 @@ post '/users/:user_id/interventions' do
                                        take_action:           params["take_action"],
                                        details:               params["details"]
                                        })
-  status 500 unless intervention
   if intervention.valid?
-    intervention.to_json
+    opt_out_results = check_opt_out_settings(params[:user_id],params[:experiment_name],params[:project])
+    status opt_out_results[:created] ? 201 : 200
+    clean_opt_out_results(opt_out_results)
+    will_be_suppressed = false
+    if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS
+      if opt_out_results[:data][:opted_out]
+        will_be_suppressed = true
+      end
+    end
+    {
+      :intervention => intervention,
+      :opt_out => opt_out_results,
+      :will_be_suppressed => will_be_suppressed
+    }.to_json
   else
     halt 500, {'Content-Type' => 'application/json'}, { :errors => intervention.errors.messages }.to_json
   end
@@ -112,8 +225,44 @@ get '/interventions/:intervention_id' do
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   intervention = Intervention.find(params[:intervention_id])
-  status 500 unless intervention
-  intervention.to_json
+  if intervention
+    opt_out_results = check_opt_out_settings(intervention[:user_id],intervention[:experiment_name],intervention[:project])
+    if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS and opt_out_results[:data][:opted_out]
+      halt 405, {'Content-Type' => 'application/json'}, { :error => "Intervention #{params[:intervention_id]} exists but was suppressed due to user opt-out" }.to_json
+    end
+    status opt_out_results[:created] ? 201 : 200
+    clean_opt_out_results(opt_out_results)
+    {
+      :intervention => intervention,
+      :opt_out => opt_out_results
+    }.to_json
+  else
+    halt 404, {'Content-Type' => 'application/json'}, { :error => "Intervention #{params[:intervention_id]} not found" }.to_json
+  end
+end
+
+def update_intervention(intervention_id,method_to_call)
+  intervention = Intervention.find(intervention_id)
+  if intervention
+    opt_out_results = check_opt_out_settings(intervention[:user_id],intervention[:experiment_name],intervention[:project])
+    if SUPPRESS_INTERVENTIONS_FOR_OPTED_OUT_USERS and opt_out_results[:data][:opted_out]
+      halt 405, {'Content-Type' => 'application/json'}, { :error => "Modifying intervention #{params[:intervention_id]} is disallowed due to user opt-out" }.to_json
+    end
+    intervention.send method_to_call
+    if intervention.save
+      status opt_out_results[:created] ? 201 : 200
+      clean_opt_out_results(opt_out_results)
+      {
+        :intervention => intervention,
+        :opt_out => opt_out_results,
+        :will_be_suppressed => false
+      }.to_json
+    else
+      halt 500, {'Content-Type' => 'application/json'}, { :error => "Could not update intervention #{params[:intervention_id]}" }.to_json
+    end
+  else
+    halt 404, {'Content-Type' => 'application/json'}, { :error => "Intervention #{params[:intervention_id]} not found" }.to_json
+  end
 end
 
 # mark an intervention as delivered - body is ignored
@@ -122,11 +271,7 @@ post '/interventions/:intervention_id/delivered' do
   headers \
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  intervention = Intervention.find(params[:intervention_id])
-  status 500 unless intervention
-  intervention.delivered!
-  intervention.save
-  intervention.to_json
+  update_intervention(params[:intervention_id],:delivered!)
 end
 
 # mark an intervention as detected - body is ignored
@@ -135,11 +280,7 @@ post '/interventions/:intervention_id/detected' do
   headers \
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  intervention = Intervention.find(params[:intervention_id])
-  status 500 unless intervention
-  intervention.detected!
-  intervention.save
-  intervention.to_json
+  update_intervention(params[:intervention_id],:detected!)
 end
 
 # mark an intervention as dismissed - body is ignored
@@ -148,11 +289,7 @@ post '/interventions/:intervention_id/dismissed' do
   headers \
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  intervention = Intervention.find(params[:intervention_id])
-  status 500 unless intervention
-  intervention.dismissed!
-  intervention.save
-  intervention.to_json
+  update_intervention(params[:intervention_id],:detected!)
 end
 
 # mark an intervention as completed - body is ignored
@@ -161,11 +298,31 @@ post '/interventions/:intervention_id/completed' do
   headers \
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
-  intervention = Intervention.find(params[:intervention_id])
-  status 500 unless intervention
-  intervention.completed!
-  intervention.save
-  intervention.to_json
+  update_intervention(params[:intervention_id],:completed!)
+end
+
+# check opt out status for a user. if no record exists, a record marked as "not opted out" is created  - params must contain project and experiment name.
+get '/users/:user_id/optout' do
+  content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
+  opt_out_results = check_opt_out_settings(params[:user_id],params[:experiment_name],params[:project])
+  status opt_out_results[:status]
+  clean_opt_out_results(opt_out_results)
+  opt_out_results.to_json
+end
+
+# mark an intervention participant as opted out - params must contain project and experiment name
+post '/users/:user_id/optout' do
+  content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
+  opt_out_results = check_opt_out_settings(params[:user_id],params[:experiment_name],params[:project],true)
+  status opt_out_results[:status]
+  clean_opt_out_results(opt_out_results)
+  opt_out_results.to_json
 end
 
 ###### Experimental Participant API
@@ -180,7 +337,7 @@ get '/experiment/:experiment_name/participants' do
   if participants.length>0
     participants.all.to_json
   else
-    halt 404, {'Content-Type' => 'application/json'}, { :error => "No participants found for experiment #{params[:experiment_name]}" }.to_json
+    halt 200, {'Content-Type' => 'application/json'}, { :error => "No participants found for experiment #{params[:experiment_name]}" }.to_json
   end
 end
 
@@ -208,7 +365,7 @@ delete '/experiment/:experiment_name/participants' do
     Participant.where(experiment_name:params[:experiment_name]).delete
     { :message => "Successfully deleted all participants from experiment #{params[:experiment_name]}" }.to_json
   else
-    halt 404, {'Content-Type' => 'application/json'}, { :error => "No participants to delete for experiment #{params[:experiment_name]}" }.to_json
+    halt 405, {'Content-Type' => 'application/json'}, { :error => "No participants to delete for experiment #{params[:experiment_name]}" }.to_json
   end
 end
 
