@@ -27,6 +27,7 @@ GEM
       bson (~> 2.2)
       connection_pool (~> 2.0)
       optionable (~> 0.2.0)
+    mysql (2.9.1)
     optionable (0.2.0)
     origin (2.1.1)
     planout (0.1.1)
@@ -51,7 +52,12 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  json
   mongoid
+  mysql
   planout
   pry
   sinatra
+
+BUNDLED WITH
+   1.11.2
