@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND noninteractive
 ADD Gemfile ./
 ADD Gemfile.lock ./
 
-RUN apt-get update && apt-get -y upgrade &&
+RUN apt-get update && apt-get -y upgrade && \
     bundle install
 
 EXPOSE 80
