@@ -1,11 +1,14 @@
-FROM zooniverse/ruby:2.2
+FROM zooniverse/ruby:2.2.0
 
 WORKDIR /app
+
+ENV DEBIAN_FRONTEND noninteractive
 
 ADD Gemfile ./
 ADD Gemfile.lock ./
 
-RUN bundle install
+RUN apt-get update && apt-get -y upgrade &&
+    bundle install
 
 EXPOSE 80
 
