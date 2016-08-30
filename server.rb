@@ -2,6 +2,8 @@ require 'sinatra'
 require 'json'
 require_relative 'environment'
 
+###### Main API: Cohort Determination and Participant Registration
+
 def active_experiments
   experiments = PlanOut.constants.collect{|experiment| experiment.to_s}.select{|experiment_name| experiment_name.include? "Experiment" }
   experiments - ["SimpleExperiment", "Experiment"]
@@ -325,7 +327,36 @@ post '/users/:user_id/optout' do
   opt_out_results.to_json
 end
 
-###### Experimental Participant API
+###### Participant API for Sugar-based Experiments - Specific to Comet Hunters Experiment
+
+# accept notification that a classification has finished, update participant and push latest to Sugar (and return it)
+post '/experiment/:experiment_name/user/:user_id/session/:session_id/classification/:classification_id' do
+  content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
+  experiment = get_experiment(params[:experiment_name]).new
+  result = experiment.class.endClassification(params[:user_id], params[:session_id], params[:classification_id])
+  status result[0]
+  body = result[1]
+  body
+end
+
+# accept notification that an intervention has finished, update participant and push latest to Sugar (and return it)
+post '/experiment/:experiment_name/user/:user_id/session/:session_id/intervention/:intervention_id' do
+  content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
+  experiment = get_experiment(params[:experiment_name]).new
+  result = experiment.class.endIntervention(params[:user_id], params[:session_id], params[:intervention_id])
+  status result[0]
+  body = result[1]
+  body
+end
+
+###### Experimental Participant API - Specific to Serengeti Blanks Experiment
+
 ###### At the moment this only works for an experiment based around maintaining a set list of random & inserted subjects per user, but could be generalized.
 
 get '/experiment/:experiment_name/participants' do
