@@ -337,9 +337,9 @@ post '/experiment/:experiment_name/user/:user_id/session/:session_id/classificat
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   experiment = get_experiment(params[:experiment_name]).new
   result = experiment.class.endClassification(params[:user_id], params[:session_id], params[:classification_id])
-  status = result[0]
+  status result[0]
   body = result[1]
-  body.to_json
+  body
 end
 
 # accept notification that an intervention has finished, update participant and push latest to Sugar (and return it)
@@ -350,9 +350,9 @@ post '/experiment/:experiment_name/user/:user_id/session/:session_id/interventio
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   experiment = get_experiment(params[:experiment_name]).new
   result = experiment.class.endIntervention(params[:user_id], params[:session_id], params[:intervention_id])
-  status = result[0]
+  status result[0]
   body = result[1]
-  body.to_json
+  body
 end
 
 ###### Experimental Participant API - Specific to Serengeti Blanks Experiment
