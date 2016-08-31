@@ -7,7 +7,7 @@ require 'uri'
 require_relative '../experiments/comet_hunters_volcrowe_experiment.rb'
 require 'json'
 
-class TestVolcroweExperiment < Test::Unit::TestCase
+class TestVolcroweExperimentBasics < Test::Unit::TestCase
 
     include PlanOut
 
@@ -17,11 +17,18 @@ class TestVolcroweExperiment < Test::Unit::TestCase
     @@TEST_QUESTIONS_USER_ID = "TEST_USER_2"
     @@FIRST_SESSION_ID = "TEST_SESSION_1"
     @@SECOND_SESSION_ID = "TEST_SESSION_2"
-    @@CLASSIFICATION_IDS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
+    @@CLASSIFICATION_MARKER = "classification"
+    @@CLASSIFICATION_IDS = []
+
+    def setup
+      @@CLASSIFICATION_IDS = []
+      100.times do |i|
+        @@CLASSIFICATION_IDS.push (i+101)
+      end
+    end
 
     def testThatExperimentNameIsAvailableAndCorrect
       experimentName = CometHuntersVolcroweExperiment1::getExperimentName
-      puts experimentName
       assert_equal(experimentName,"CometHuntersVolcroweExperiment1")
     end
 
@@ -118,32 +125,12 @@ class TestVolcroweExperiment < Test::Unit::TestCase
       end
     end
 
-
-=begin
-    def testClassificationForNewUser()
-
-    end
-
-    def testInterventionForNewUser()
-
-    end
-
-    def testClassificationForExistingUser()
-
-    end
-
-    def testInterventionForExistingUser()
-
-    end
-=end
-
 ## Helper methods
     def deleteUser(user_id)
       uri = URI.parse("#{@@SERVER_URL}/experiment/CometHuntersVolcroweExperiment1/participant/#{user_id}")
       http = Net::HTTP.new(uri.host, uri.port)
       request = Net::HTTP::Delete.new(uri.request_uri)
       response = http.request(request)
-      puts response.body
       assert_equal("200",response.code)
     end
 ##
