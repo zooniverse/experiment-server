@@ -1,29 +1,54 @@
 require 'plan_out'
-require 'net/http'
 require 'uri'
 require 'net/http'
 require 'net/https'
 
 module PlanOut
   class CometHuntersVolcroweExperiment1 < PlanOut::SimpleExperiment
+    @@SUGAR_URL = !ENV["SUGAR_HOST"].nil? ? "#{ENV["SUGAR_HOST"]}/experiment" : "https://notifications-staging.zooniverse.org/experiment"
+    @@SUGAR_USERNAME = ENV["SUGAR_USERNAME"]
+    @@SUGAR_PASSWORD = ENV["SUGAR_PASSWORD"]
+    @@PRODUCTION_EXPERIMENT_SERVER = "http://experiments.zooniverse.org/"
+    @@ENV = Assignment.new(@@PRODUCTION_EXPERIMENT_SERVER) # seed for random assignment to cohorts
+    @@COHORT_CONTROL = "control"
+    @@COHORT_QUESTIONS = "questions"
+    @@COHORT_STATEMENTS = "statements"
+    @@COHORT_INELIGIBLE = "(ineligible)"
+    @@ANONYMOUS = "(anonymous)"
+    @@PROJECT_TOKEN = "mschwamb/comet-hunters"
+    @@EXPERIMENT_NAME = "CometHuntersVolcroweExperiment1"
+    @@CLASSIFICATION_MARKER = "classification"
+
+    def self.getExperimentName
+      @@EXPERIMENT_NAME
+    end
+
+    def self.getControlCohort
+      @@COHORT_CONTROL
+    end
+
+    def self.getStatementsCohort
+      @@COHORT_STATEMENTS
+    end
+
+    def self.getQuestionsCohort
+      @@COHORT_QUESTIONS
+    end
+
     def setup
-      if ENV["SUGAR_HOST"].present?
-        @@SUGAR_URL = "#{ENV["SUGAR_HOST"]}/experiment"
+
+    end
+
+    def self.ensureNotArray(jsonString)
+      if jsonString!=""
+        obj = JSON.parse(jsonString.dup)
+        if obj.kind_of?(Array) and obj.length==1
+          obj = obj[0]
+        end
+        obj.to_json
       else
-        @@SUGAR_URL = "https://notifications-staging.zooniverse.org/experiment"
+        jsonString
       end
-      @@SUGAR_USERNAME = ENV["SUGAR_USERNAME"]
-      @@SUGAR_PASSWORD = ENV["SUGAR_PASSWORD"]
-      @@PRODUCTION_EXPERIMENT_SERVER = "http://experiments.zooniverse.org/"
-      @@ENV = Assignment.new(@@PRODUCTION_EXPERIMENT_SERVER) # seed for random assignment to cohorts
-      @@COHORT_CONTROL = "control"
-      @@COHORT_QUESTIONS = "questions"
-      @@COHORT_STATEMENTS = "statements"
-      @@COHORT_INELIGIBLE = "(ineligible)"
-      @@ANONYMOUS = "(anonymous)"
-      @@PROJECT_TOKEN = "mschwamb/comet-hunters"
-      @@EXPERIMENT_NAME = "CometHuntersVolcroweExperiment1"
-      @@CLASSIFICATION_MARKER = "classification"
     end
 
     def self.projects
@@ -86,16 +111,21 @@ module PlanOut
             experiment_name:                @@EXPERIMENT_NAME,
             cohort:                         cohort,
             user_id:                        user_id,
+            active:                         true,
+            excluded:                       false,
+            excluded_reason:                nil,
+            interventions_available:        [],
             interventions_seen:             [],
+            original_session_plans:         Hash.new,
             session_histories:              Hash.new,
-            current_session_history:        []
+            current_session_id:             nil,
+            current_session_history:        [],
+            current_session_plan:           [],
+            seq_of_next_event:              -1
       }
       if cohort
         creation_params[:interventions_available] = CometHuntersVolcroweExperiment1::getInterventionsAvailable(cohort)
-        creation_params[:active] = true
-        creation_params[:excluded] = false
       else
-        creation_params[:interventions_available] = []
         creation_params[:active] = false
         creation_params[:excluded] = true
         creation_params[:excluded_reason] = "No cohort available for user."
@@ -167,41 +197,69 @@ module PlanOut
       return []
     end
 
+    # start a new session (or restart the session)
+    def self.startOrRestartSession(participant, session_id)
+      # archive the session history for the previous session
+      if !participant[:current_session_id].nil?
+        participant[:session_histories][participant[:current_session_id]] = participant[:current_session_history].dup
+      end
+
+      # back up first non-nil session plan for each session_id
+      if !participant[:current_session_id].nil? and !participant[:current_session_plan].nil? and !participant[:original_session_plans].key?(participant[:current_session_id])
+        participant[:original_session_plans][participant[:current_session_id]] = participant[:current_session_plan]
+      end
+
+      # if not a restart, clear the current session log and mark that we are now in the new session
+      if participant[:current_session_id] != session_id
+        participant[:current_session_history] = []
+        participant[:current_session_id] = session_id
+      end
+
+      # generate a new plan for this session, and point to the start of it
+      participant[:current_session_plan] = CometHuntersVolcroweExperiment1::generateSessionPlan(participant[:cohort], participant[:interventions_available])
+      if participant[:current_session_plan].length > 0
+        participant[:seq_of_next_event] = 0
+      end
+    end
+
     # ensure that participant data is set up correctly according to the provided session ID
     def self.verifySession(participant, session_id)
-      if participant.current_session_id != session_id
+      if participant[:current_session_id] != session_id
         # new session
-        participant[:session_histories][participant.current_session_id] = participant.current_session_history.dup
-        participant[:current_session_id] = session_id
-        participant[:seq_of_next_event] = 0
-        participant[:current_session_history] = []
-        participant[:current_session_plan] = CometHuntersVolcroweExperiment1::generateSessionPlan(participant.cohort, participant.interventions_available)
+        CometHuntersVolcroweExperiment1::startOrRestartSession(participant, session_id)
       end
     end
 
     # if the next entry in the session plan matches the event we just completed, advance.
-    def self.advancedIfNextEventSatisfied(this_event,participant)
-      next_event = participant.current_session_plan[participant.seq_of_next_event]
+    def self.advanceIfNextEventSatisfied(this_event, participant, session_id)
+      next_event = participant[:current_session_plan][participant[:seq_of_next_event]]
       if this_event==@@CLASSIFICATION_MARKER and next_event==@@CLASSIFICATION_MARKER
         # expected classification satisfied
-        participant.seq_of_next_event += 1
+        participant[:seq_of_next_event] += 1
       elsif this_event==next_event
         # expected intervention satisfied
-        participant.seq_of_next_event += 1
+        participant[:seq_of_next_event] += 1
       else
         # mismatch - it is recorded but we do not advance.
+
+        # if we encountered an intervention, that features in the session plan somewhere in the future,
+        # we have to come up with a new session plan for this session, excluding that intervention
+        # (Note: it has already been marked unavailable so just regenerating a new plan is sufficient).
+        if this_event!=@@CLASSIFICATION_MARKER and participant[:current_session_plan][participant[:seq_of_next_event]..-1].include?(this_event)
+          CometHuntersVolcroweExperiment1::startOrRestartSession(participant, session_id)
+        end
       end
-      if participant.seq_of_next_event >= participant.current_session_plan.length
+      if participant[:seq_of_next_event] >= participant[:current_session_plan].length
         # session plan complete
-        participant.active = false
+        participant[:active] = false
         # TODO: do we need to do more here? e.g. check all used? archive the session?
       end
     end
 
     def self.getJSONPostBodyForSugar(participant)
       {experiments: [{
-        user_id: participant.user_id,
-        message: participant.to_json,
+        user_id: participant[:user_id],
+        message: participant,
         section: @@PROJECT_TOKEN,
         delivered: false
       }]}.to_json
@@ -214,8 +272,9 @@ module PlanOut
       req = Net::HTTP::Post.new(uri.path, initheader = {'Content-Type' => 'application/json'})
       req.basic_auth @@SUGAR_USERNAME, @@SUGAR_PASSWORD
       req.body = CometHuntersVolcroweExperiment1::getJSONPostBodyForSugar(participant)
-      res = https.request(req)
-      [res.code, res.body]
+      response = https.request(req)
+      body = CometHuntersVolcroweExperiment1::ensureNotArray(response.body)
+      [response.code, body] # response.body is a json string
     end
 
     # upon notification that a classification has ended, update participant and post latest data to Sugar
@@ -223,23 +282,25 @@ module PlanOut
       # ensure the user is registered
       participant = CometHuntersVolcroweExperiment1::getParticipant(user_id)
       CometHuntersVolcroweExperiment1::verifySession(participant, session_id)
-      participant.current_session_history.push "classification:#{classification_id}"
-      CometHuntersVolcroweExperiment1::advancedIfNextEventSatisfied(@@CLASSIFICATION_MARKER,participant)
+      participant[:current_session_history].push "classification:#{classification_id}"
+      CometHuntersVolcroweExperiment1::advanceIfNextEventSatisfied(@@CLASSIFICATION_MARKER, participant, session_id)
       participant.save()
-      CometHuntersVolcroweExperiment1::postLatestToSugar(participant,session_id)
+      res = CometHuntersVolcroweExperiment1::postLatestToSugar(participant,session_id) # returns json
+      print "endClassification returning a ",res[0]
+      res
     end
 
     # upon notification that an intervention has ended, update participant and post latest data to Sugar
     def self.endIntervention(user_id, session_id, intervention_id)
       # ensure the user is registered
       participant = CometHuntersVolcroweExperiment1::getParticipant(user_id)
-      participant.interventions_available.delete intervention_id
-      participant.interventions_seen.push intervention_id
+      participant[:interventions_available].delete intervention_id
+      participant[:interventions_seen].push intervention_id
       CometHuntersVolcroweExperiment1::verifySession(participant, session_id)
-      participant.current_session_history.push "intervention:#{intervention_id}"
-      CometHuntersVolcroweExperiment1::advancedIfNextEventSatisfied(intervention_id,participant)
+      participant[:current_session_history].push "intervention:#{intervention_id}"
+      CometHuntersVolcroweExperiment1::advanceIfNextEventSatisfied(intervention_id, participant, session_id)
       participant.save()
-      CometHuntersVolcroweExperiment1::postLatestToSugar(participant,session_id)
+      CometHuntersVolcroweExperiment1::postLatestToSugar(participant,session_id) # returns json
     end
 
     def assign(params, **inputs)
