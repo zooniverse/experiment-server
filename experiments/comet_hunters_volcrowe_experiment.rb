@@ -31,7 +31,7 @@ module PlanOut
     end
 
     def self.getCohort(user_id)
-      if user_id==@@ANONYMOUS or defined?(user_id)==nil or user_ID.nil?
+      if user_id==@@ANONYMOUS or defined?(user_id)==nil or user_id.nil?
         @@COHORT_INELIGIBLE
       else
         UniformChoice.new({
@@ -84,21 +84,21 @@ module PlanOut
       cohort = CometHuntersVolcroweExperiment1::getCohort(user_id)
       creation_params = {
             experiment_name:                @@EXPERIMENT_NAME,
+            cohort:                         cohort,
             user_id:                        user_id,
             interventions_seen:             [],
             session_histories:              Hash.new,
             current_session_history:        []
       }
       if cohort
-        interventions_available = CometHuntersVolcroweExperiment1::getInterventionsAvailable(cohort)
-        creation_params.interventions_available = interventions_available
-        creation_params.active = true
-        creation_params.excluded = false
+        creation_params[:interventions_available] = CometHuntersVolcroweExperiment1::getInterventionsAvailable(cohort)
+        creation_params[:active] = true
+        creation_params[:excluded] = false
       else
-        creation_params.interventions_available = []
-        creation_params.active = false
-        creation_params.excluded = true
-        creation_params.excluded_reason = "No cohort available for user."
+        creation_params[:interventions_available] = []
+        creation_params[:active] = false
+        creation_params[:excluded] = true
+        creation_params[:excluded_reason] = "No cohort available for user."
       end
       Participant.create(creation_params)
     end
@@ -171,11 +171,11 @@ module PlanOut
     def self.verifySession(participant, session_id)
       if participant.current_session_id != session_id
         # new session
-        participant.session_histories.current_session_id = participant.current_session_history.dup
-        participant.current_session_id = session_id
-        participant.seq_of_next_event = 0
-        participant.current_session_history = []
-        participant.current_session_plan = CometHuntersVolcroweExperiment1::generateSessionPlan(participant.cohort, participant.interventions_available)
+        participant[:session_histories][participant.current_session_id] = participant.current_session_history.dup
+        participant[:current_session_id] = session_id
+        participant[:seq_of_next_event] = 0
+        participant[:current_session_history] = []
+        participant[:current_session_plan] = CometHuntersVolcroweExperiment1::generateSessionPlan(participant.cohort, participant.interventions_available)
       end
     end
 
@@ -226,7 +226,7 @@ module PlanOut
       participant.current_session_history.push "classification:#{classification_id}"
       CometHuntersVolcroweExperiment1::advancedIfNextEventSatisfied(@@CLASSIFICATION_MARKER,participant)
       participant.save()
-      CometHuntersVolcroweExperiment1::postLatestToSugar(participant)
+      CometHuntersVolcroweExperiment1::postLatestToSugar(participant,session_id)
     end
 
     # upon notification that an intervention has ended, update participant and post latest data to Sugar
@@ -239,7 +239,7 @@ module PlanOut
       participant.current_session_history.push "intervention:#{intervention_id}"
       CometHuntersVolcroweExperiment1::advancedIfNextEventSatisfied(intervention_id,participant)
       participant.save()
-      CometHuntersVolcroweExperiment1::postLatestToSugar(participant)
+      CometHuntersVolcroweExperiment1::postLatestToSugar(participant,session_id)
     end
 
     def assign(params, **inputs)
