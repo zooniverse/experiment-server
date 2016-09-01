@@ -23,7 +23,7 @@ module PlanOut
     @@CLASSIFICATION_MARKER = "classification"
 
     def setup
-      if @@SUGAR_URL == @@SUGAR_PRODUCTION_URL:
+      if @@SUGAR_URL == @@SUGAR_PRODUCTION_URL
         @@PROJECT_SLUG = @@PROJECT_SLUG_PRODUCTION
       else
         @@PROJECT_SLUG = @@PROJECT_SLUG_DEVELOPMENT
@@ -116,7 +116,7 @@ module PlanOut
       cohort = CometHuntersVolcroweExperiment1::getCohort(user_id)
       creation_params = {
             experiment_name:                @@EXPERIMENT_NAME,
-            project_slug:                   @@PROJECt
+            project_slug:                   @@PROJECT_SLUG
             cohort:                         cohort,
             user_id:                        user_id,
             active:                         true,
