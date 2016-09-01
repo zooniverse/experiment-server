@@ -14,6 +14,8 @@ class Participant
     field :current_session_history, type: Array
     field :current_session_plan, type: Array
     field :seq_of_next_event, type: Integer
+    field :intervention_time, type: Mongoid::Boolean
+    field :next_event, type: String
 
     def as_json(args)
         result = super(args)

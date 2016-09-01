@@ -44,6 +44,9 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
         assert_equal(current_session_history,data["message"]["current_session_history"],"After #{step} classifications, expected current session history to be updated.")
         step = 1
         while nextEvent==@@CLASSIFICATION_MARKER
+          assert_equal(false,data["message"]["intervention_time"],"After #{step} classifications, expected to be told that an intervention is not due next.")
+          assert_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"After #{step} classifications, expected to be told that the next event is a classification.")
+          assert_equal(session_plan[seq],data["message"]["next_event"],"After #{step} classifications, expected next event in session plan to also be in next_event.")
           step += 1
           classification_id_index += 1
           uri = URI.parse("#{@@SERVER_URL}/experiment/CometHuntersVolcroweExperiment1/user/#{@@TEST_STATEMENTS_USER_ID}/session/#{@@FIRST_SESSION_ID}/classification/#{@@CLASSIFICATION_IDS[classification_id_index]}")
@@ -60,7 +63,10 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
           assert_equal(current_session_history,data["message"]["current_session_history"],"After #{step} classifications, expected current session history to be updated.")
           nextEvent = session_plan[seq]
         end
-        assert_not_equal(@@CLASSIFICATION_MARKER,session_plan[seq],"After #{step} classifications, verifying test logic: Expected the next event in the session plan to be an intervention.")
+        assert_equal(true,data["message"]["intervention_time"],"After #{step} classifications, expected to be told that an intervention is due next.")
+        assert_not_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"After #{step} classifications, expected to be told that the next event is an intervention.")
+        assert_not_equal(@@CLASSIFICATION_MARKER,session_plan[seq],"After #{step} classifications, expected the next event in the session plan to be an intervention.")
+        assert_equal(session_plan[seq],data["message"]["next_event"],"After #{step} classifications, expected next event in session plan to also be in next_event.")
         # now post the intervention.
         intervention_to_post = session_plan[seq]
         uri = URI.parse("#{@@SERVER_URL}/experiment/CometHuntersVolcroweExperiment1/user/#{@@TEST_STATEMENTS_USER_ID}/session/#{@@FIRST_SESSION_ID}/intervention/#{intervention_to_post}")
@@ -88,7 +94,11 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
         assert_equal(current_session_history,data["message"]["current_session_history"],"After #{step} classifications and the #{intervention_to_post} intervention, expected current session history to be updated.")
         assert_equal(session_plan,data["message"]["current_session_plan"],"After #{step} classifications and the #{intervention_to_post} intervention, expected session plan not to change.")
         assert_equal(seq,data["message"]["seq_of_next_event"],"After #{step} classifications and the #{intervention_to_post} intervention, expected session plan pointer to advance.")
-        # now one more classification
+        assert_equal(false,data["message"]["intervention_time"],"After #{step} classifications and the #{intervention_to_post} intervention, expected to be told that an intervention is not due next.")
+        assert_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"After #{step} classifications, expected to be told that the next event is an intervention.")
+        assert_equal(@@CLASSIFICATION_MARKER,session_plan[seq],"After #{step} classifications and the #{intervention_to_post} intervention, expected the next event in the session plan to be an intervention.")
+        assert_equal(session_plan[seq],data["message"]["next_event"],"After #{step} classifications and the #{intervention_to_post} intervention, expected next event in session plan to also be in next_event.")
+        # TODO now one more classification
       ensure
         deleteUser(@@TEST_STATEMENTS_USER_ID)
       end

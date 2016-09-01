@@ -65,6 +65,8 @@ class TestVolcroweExperimentBasics < Test::Unit::TestCase
         assert_not_equal(0, data["message"]["current_session_plan"].length,"Expected a non-empty session plan.")
         assert(data["message"]["current_session_plan"].length>30,"Expected a session plan longer than 30 events.")
         assert_equal(1, data["message"]["seq_of_next_event"],"Expected to be pointing to second event in session plan.")
+        assert_equal(false,data["message"]["intervention_time"],"Expected to be told that an intervention is not due next.")
+        assert_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"Expected to be told that the next event is a classification.")
       ensure
         deleteUser(@@TEST_STATEMENTS_USER_ID)
       end
@@ -93,6 +95,8 @@ class TestVolcroweExperimentBasics < Test::Unit::TestCase
         assert_not_equal(0, data["message"]["current_session_plan"].length,"Expected a non-empty session plan.")
         assert(data["message"]["current_session_plan"].length>30,"Expected a session plan longer than 30 events.")
         assert_equal(1, data["message"]["seq_of_next_event"],"Expected to be pointing to second event in session plan.")
+        assert_equal(false,data["message"]["intervention_time"],"Expected to be told that an intervention is not due next.")
+        assert_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"Expected to be told that the next event is a classification.")
       ensure
         deleteUser(@@TEST_QUESTIONS_USER_ID)
       end
@@ -109,8 +113,8 @@ class TestVolcroweExperimentBasics < Test::Unit::TestCase
         assert_equal(CometHuntersVolcroweExperiment1::getExperimentName,data["message"]["experiment_name"],"Wrong experiment name.")
         assert_equal(CometHuntersVolcroweExperiment1::getControlCohort,data["message"]["cohort"],"Wrong cohort.")
         assert_equal(@@TEST_CONTROL_USER_ID,data["message"]["user_id"],"Wrong user ID.")
-        assert(data["message"]["active"]==true,"Expected participant to be active.")
-        assert(data["message"]["excluded"]==false,"Expected participant not to be excluded.")
+        assert_equal(true,data["message"]["active"],"Expected participant to be active.")
+        assert_equal(false,data["message"]["excluded"],"Expected participant not to be excluded.")
         assert_nil(data["message"]["excluded_reason"],"Expected no exclusion reason")
         assert_equal(0,data["message"]["interventions_available"].length,"Expected no available interventions.")
         assert_equal(0,data["message"]["interventions_seen"].length,"Expected no seen interventions.")
@@ -120,6 +124,8 @@ class TestVolcroweExperimentBasics < Test::Unit::TestCase
         assert_equal(["classification:#{@@CLASSIFICATION_IDS[0]}"], data["message"]["current_session_history"],"Expected empty current session history.")
         assert_equal(0, data["message"]["current_session_plan"].length,"Expected an empty session plan.")
         assert_equal(-1, data["message"]["seq_of_next_event"],"Expected no valid pointer in session plan.")
+        assert_equal(false,data["message"]["intervention_time"],"Expected to be told that an intervention is not not due next.")
+        assert_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"Expected to be told that the next event is a classification.")
       ensure
         deleteUser(@@TEST_CONTROL_USER_ID)
       end

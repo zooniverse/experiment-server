@@ -117,7 +117,9 @@ module PlanOut
             current_session_id:             nil,
             current_session_history:        [],
             current_session_plan:           [],
-            seq_of_next_event:              -1
+            seq_of_next_event:              -1,
+            intervention_time:              false,
+            next_event:                     @@CLASSIFICATION_MARKER
       }
       if cohort
         creation_params[:interventions_available] = CometHuntersVolcroweExperiment1::getInterventionsAvailable(cohort)
@@ -136,7 +138,6 @@ module PlanOut
         participant = CometHuntersVolcroweExperiment1::registerParticipant(user_id)
       end
       participant
-
     end
 
     # pick a random number of classifications that need to occur before the first intervention
@@ -229,24 +230,31 @@ module PlanOut
 
     # if the next entry in the session plan matches the event we just completed, advance.
     def self.advanceIfNextEventSatisfied(this_event, participant, session_id)
-      next_event = participant.current_session_plan[participant.seq_of_next_event]
-      if this_event==@@CLASSIFICATION_MARKER and next_event==@@CLASSIFICATION_MARKER
-        # expected classification satisfied
-        participant.seq_of_next_event += 1
-      elsif this_event==next_event
-        # expected intervention satisfied
-        participant.seq_of_next_event += 1
-      else
-        # mismatch - it is recorded but we do not advance.
+      if (participant.cohort == @@COHORT_QUESTIONS or participant.cohort == @@COHORT_STATEMENTS)
+        if this_event == @@CLASSIFICATION_MARKER and participant.next_event == @@CLASSIFICATION_MARKER
+          # expected classification satisfied
+          participant.seq_of_next_event += 1
+        elsif this_event == participant.next_event
+          # expected intervention satisfied
+          participant.seq_of_next_event += 1
+        else
+          # mismatch - it is recorded but we do not advance.
 
-        # if we encountered an intervention, that features in the session plan somewhere in the future,
-        # we have to come up with a new session plan for this session, excluding that intervention
-        # (Note: it has already been marked unavailable so just regenerating a new plan is sufficient).
-        if this_event!=@@CLASSIFICATION_MARKER and participant.current_session_plan[participant.seq_of_next_event..-1].include?(this_event)
-          CometHuntersVolcroweExperiment1::startOrRestartSession(participant, session_id)
+          # if we encountered an intervention, that features in the session plan somewhere in the future,
+          # we have to come up with a new session plan for this session, excluding that intervention
+          # (Note: it has already been marked unavailable so just regenerating a new plan is sufficient).
+          if this_event != @@CLASSIFICATION_MARKER and participant.current_session_plan[participant.seq_of_next_event..-1].include?(this_event)
+            CometHuntersVolcroweExperiment1::startOrRestartSession(participant, session_id)
+          end
         end
       end
-      if participant.seq_of_next_event >= participant.current_session_plan.length
+      if participant.cohort != @@COHORT_QUESTIONS and participant.cohort != @@COHORT_STATEMENTS
+        participant.next_event = @@CLASSIFICATION_MARKER
+      else
+        participant.next_event = participant.current_session_plan[participant.seq_of_next_event]
+      end
+      participant.intervention_time = (participant.next_event != @@CLASSIFICATION_MARKER)
+      if (participant.cohort == @@COHORT_QUESTIONS or participant.cohort == @@COHORT_STATEMENTS) and participant.seq_of_next_event >= participant.current_session_plan.length
         # session plan complete
         participant.active = false
         # TODO: do we need to do more here? e.g. check all used? archive the session?
