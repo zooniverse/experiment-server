@@ -5,7 +5,9 @@ require 'net/https'
 
 module PlanOut
   class CometHuntersVolcroweExperiment1 < PlanOut::SimpleExperiment
-    @@SUGAR_URL = !ENV["SUGAR_HOST"].nil? ? "#{ENV["SUGAR_HOST"]}/experiment" : "https://notifications-staging.zooniverse.org/experiment"
+    @@SUGAR_STAGING_URL = "https://notifications-staging.zooniverse.org/experiment"
+    @@SUGAR_PRODUCTION_URL = "https://notifications.zooniverse.org/experiment"
+    @@SUGAR_URL = !ENV["SUGAR_HOST"].nil? ? "#{ENV["SUGAR_HOST"]}/experiment" : @@SUGAR_STAGING_URL
     @@SUGAR_USERNAME = ENV["SUGAR_USERNAME"]
     @@SUGAR_PASSWORD = ENV["SUGAR_PASSWORD"]
     @@PRODUCTION_EXPERIMENT_SERVER = "http://experiments.zooniverse.org/"
@@ -15,9 +17,18 @@ module PlanOut
     @@COHORT_STATEMENTS = "statements"
     @@COHORT_INELIGIBLE = "(ineligible)"
     @@ANONYMOUS = "(anonymous)"
-    @@PROJECT_TOKEN = "mschwamb/comet-hunters"
+    @@PROJECT_SLUG_PRODUCTION = "mschwamb/comet-hunters"
+    @@PROJECT_SLUG_DEVELOPMENT = "mschwamb/planet-four-terrains"
     @@EXPERIMENT_NAME = "CometHuntersVolcroweExperiment1"
     @@CLASSIFICATION_MARKER = "classification"
+
+    def setup
+      if @@SUGAR_URL == @@SUGAR_PRODUCTION_URL
+        @@PROJECT_SLUG = @@PROJECT_SLUG_PRODUCTION
+      else
+        @@PROJECT_SLUG = @@PROJECT_SLUG_DEVELOPMENT
+      end
+    end
 
     def self.getExperimentName
       @@EXPERIMENT_NAME
@@ -48,7 +59,7 @@ module PlanOut
     end
 
     def self.projects
-      [@@PROJECT_TOKEN]
+      [@@PROJECT_SLUG]
     end
 
     def self.getCohort(user_id)
@@ -105,6 +116,7 @@ module PlanOut
       cohort = CometHuntersVolcroweExperiment1::getCohort(user_id)
       creation_params = {
             experiment_name:                @@EXPERIMENT_NAME,
+            project_slug:                   @@PROJECT_SLUG,
             cohort:                         cohort,
             user_id:                        user_id,
             active:                         true,
@@ -265,7 +277,7 @@ module PlanOut
       {experiments: [{
         user_id: participant.user_id,
         message: participant,
-        section: @@PROJECT_TOKEN,
+        section: @@PROJECT_SLUG,
         delivered: false
       }]}.to_json
     end
