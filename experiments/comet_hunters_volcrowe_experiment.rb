@@ -116,7 +116,7 @@ module PlanOut
       cohort = CometHuntersVolcroweExperiment1::getCohort(user_id)
       creation_params = {
             experiment_name:                @@EXPERIMENT_NAME,
-            project_slug:                   @@PROJECT_SLUG
+            project_slug:                   @@PROJECT_SLUG,
             cohort:                         cohort,
             user_id:                        user_id,
             active:                         true,
