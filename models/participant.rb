@@ -1,6 +1,7 @@
 class Participant
     include Mongoid::Document
     field :experiment_name, type: String
+    field :project_slug, type: String
     field :cohort, type: String
     field :user_id, type: String
     field :active, type: Mongoid::Boolean
