@@ -27,23 +27,6 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       end
     end
 
-    def handleClassificationWithChecks(data, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count)
-      preCheckClassification data, session_plan, seq, current_session_history
-      data = postClassification classification_id_index
-      seq, classification_id_index, session_plan, nextEvent, current_session_history = advanceByClassification data, seq, session_plan, nextEvent, current_session_history, classification_id_index
-      postCheckClassification seq, data, session_plan, classification_id_index, current_session_history
-      return data, seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count
-    end
-
-    def handleInterventionWithChecks(data, session_plan, seq, current_session_history, interventions_available_count, interventions_seen_count)
-      preCheckIntervention data, session_plan, seq, current_session_history
-      intervention_to_post = session_plan[seq]
-      data = postIntervention intervention_to_post, current_session_history
-      seq, interventions_available_count, interventions_seen_count = advanceByIntervention data, seq, current_session_history, intervention_to_post, interventions_available_count, interventions_seen_count
-      postCheckIntervention data, interventions_available_count, interventions_seen_count, intervention_to_post, current_session_history, seq, session_plan
-      return data, seq, interventions_available_count, interventions_seen_count
-    end
-
     def testUpToFirstInterventionForANewStatementsUser
       classification_id_index = 0
       interventions_available_count = 15
@@ -60,23 +43,14 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       end
     end
 
-    def handleABlockOfClassificationsThenAnIntervention(data, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count)
-      while nextEvent==@@CLASSIFICATION_MARKER
-        data, seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count = handleClassificationWithChecks data, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count
-      end
-      data, seq, interventions_available_count, interventions_seen_count = handleInterventionWithChecks data, session_plan, seq, current_session_history, interventions_available_count, interventions_seen_count
-      return data, seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count
-    end
-
-
     def testUpToFirstInterventionForANewStatementsUser
       classification_id_index = 0
       interventions_available_count = 15
       interventions_seen_count = 0
       begin
         data = postClassification classification_id_index
-        seq, classification_id_index, session_plan, nextEvent, current_session_history = advanceByClassification data, seq, session_plan, nextEvent, current_session_history, classification_id_index
-        data, seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count = handleABlockOfClassificationsThenAnIntervention(data, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count)
+        seq, classification_id_index, session_plan, nextEvent, current_session_history, intervention_time = advanceByClassification data, seq, session_plan, nextEvent, current_session_history, classification_id_index, intervention_time
+        data, seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count = handleABlockOfClassificationsThenAnIntervention data, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count, intervention_time
       ensure
         deleteUser(@@TEST_STATEMENTS_USER_ID)
       end
@@ -88,9 +62,9 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
 #      interventions_seen_count = 0
 #      begin
 #        data = postClassification classification_id_index
-#        seq, classification_id_index, session_plan, nextEvent, current_session_history = advanceByClassification data, seq, session_plan, nextEvent, current_session_history, classification_id_index
+#        seq, classification_id_index, session_plan, nextEvent, current_session_history, intervention_time = advanceByClassification data, seq, session_plan, nextEvent, current_session_history, classification_id_index, intervention_time
 #        interventions_available_count.times do |i|
-#          data, seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count = handleABlockOfClassificationsThenAnIntervention(data, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count)
+#          data, seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count = handleABlockOfClassificationsThenAnIntervention data, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count, intervention_time
 #        end
 #      ensure
 #        deleteUser(@@TEST_STATEMENTS_USER_ID)
@@ -107,16 +81,43 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       assert_equal("200",response.code)
     end
 
-    def preCheckClassification(data, session_plan, seq, current_session_history)
-      assert_equal(false,data["message"]["intervention_time"],"#{getSessionSoFar(current_session_history)}Expected to be told that an intervention is not due next.")
-      assert_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"#{getSessionSoFar(current_session_history)}Expected to be told that the next event is a classification.")
-      assert_equal(session_plan[seq],data["message"]["next_event"],"#{getSessionSoFar(current_session_history)}Expected next event in session plan to also be in next_event.")
+    def handleABlockOfClassificationsThenAnIntervention(data, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count, intervention_time)
+      while nextEvent==@@CLASSIFICATION_MARKER
+        data, seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count, intervention_time = handleClassificationWithChecks data, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count, intervention_time
+      end
+      data, seq, interventions_available_count, interventions_seen_count, intervention_time = handleInterventionWithChecks data, session_plan, seq, current_session_history, interventions_available_count, interventions_seen_count, nextEvent, intervention_time
+      return data, seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count, intervention_time
     end
 
-    def postCheckClassification(seq, data, session_plan, classification_id_index, current_session_history)
-      assert_equal(@@FIRST_SESSION_ID,data["message"]["current_session_id"], "#{getSessionSoFar(current_session_history)}Expected session ID not to change.")
-      assert_equal(seq,data["message"]["seq_of_next_event"],"#{getSessionSoFar(current_session_history)}Expected session plan pointer to advance.")
-      assert_equal(session_plan,data["message"]["current_session_plan"],"#{getSessionSoFar(current_session_history)}Expected session plan not to change.")
+    def handleClassificationWithChecks(data, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count, intervention_time)
+      preCheckClassification data, session_plan, seq, current_session_history, nextEvent, intervention_time
+      data = postClassification classification_id_index
+      seq, classification_id_index, session_plan, nextEvent, current_session_history = advanceByClassification data, seq, session_plan, nextEvent, current_session_history, classification_id_index, intervention_time
+      postCheckClassification seq, data, session_plan, classification_id_index, current_session_history, nextEvent, intervention_time
+      return data, seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count, intervention_time
+    end
+
+    def handleInterventionWithChecks(data, session_plan, seq, current_session_history, interventions_available_count, interventions_seen_count, nextEvent, intervention_time)
+      preCheckIntervention data, session_plan, seq, current_session_history, nextEvent, intervention_time
+      intervention_to_post = session_plan[seq]
+      data = postIntervention intervention_to_post, current_session_history
+      seq, interventions_available_count, interventions_seen_count = advanceByIntervention data, seq, current_session_history, intervention_to_post, interventions_available_count, interventions_seen_count
+      postCheckIntervention data, interventions_available_count, interventions_seen_count, intervention_to_post, current_session_history, seq, session_plan, nextEvent, intervention_time
+      return data, seq, interventions_available_count, interventions_seen_count, nextEvent, intervention_time
+    end
+
+    def preCheckClassification(data, session_plan, seq, current_session_history, nextEvent, intervention_time)
+      context = getContextForAssert session_plan, seq, current_session_history, nextEvent, intervention_time
+      assert_equal(false,data["message"]["intervention_time"],"#{context}Expected to be told that an intervention is not due next.")
+      assert_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"#{context}Expected to be told that the next event is a classification.")
+      assert_equal(session_plan[seq],data["message"]["next_event"],"#{context}Expected next event in session plan to also be in next_event.")
+    end
+
+    def postCheckClassification(seq, data, session_plan, classification_id_index, current_session_history, nextEvent, intervention_time)
+      context = getContextForAssert session_plan, seq, current_session_history, nextEvent, intervention_time
+      assert_equal(@@FIRST_SESSION_ID,data["message"]["current_session_id"], "#{context}Expected session ID not to change.")
+      assert_equal(seq,data["message"]["seq_of_next_event"],"#{context}Expected session plan pointer to advance.")
+      assert_equal(session_plan,data["message"]["current_session_plan"],"#{context}Expected session plan not to change.")
     end
 
     def postClassification(classification_id_index)
@@ -128,11 +129,12 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       JSON.parse(response.body)
     end
 
-    def preCheckIntervention(data, session_plan, seq, current_session_history)
-      assert_equal(true,data["message"]["intervention_time"],"#{getSessionSoFar(current_session_history)}Expected to be told that an intervention is due next.")
-      assert_not_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"#{getSessionSoFar(current_session_history)}Expected to be told that the next event is an intervention.")
-      assert_not_equal(@@CLASSIFICATION_MARKER,session_plan[seq],"#{getSessionSoFar(current_session_history)}Expected the next event in the session plan to be an intervention.")
-      assert_equal(session_plan[seq],data["message"]["next_event"],"#{getSessionSoFar(current_session_history)}Expected next event in session plan to also be in next_event.")
+    def preCheckIntervention(data, session_plan, seq, current_session_history, nextEvent, intervention_time)
+      context = getContextForAssert session_plan, seq, current_session_history, nextEvent, intervention_time
+      assert_equal(true,data["message"]["intervention_time"],"#{context}Expected to be told that an intervention is due next.")
+      assert_not_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"#{context}Expected to be told that the next event is an intervention.")
+      assert_not_equal(@@CLASSIFICATION_MARKER,session_plan[seq],"#{context}Expected the next event in the session plan to be an intervention.")
+      assert_equal(session_plan[seq],data["message"]["next_event"],"#{context}Expected next event in session plan to also be in next_event.")
     end
 
     def postIntervention(intervention_to_post, current_session_history)
@@ -144,30 +146,31 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       JSON.parse(response.body)
     end
 
-    def postCheckIntervention(data, interventions_available_count, interventions_seen_count, intervention_to_post, current_session_history, seq, session_plan)
+    def postCheckIntervention(data, interventions_available_count, interventions_seen_count, intervention_to_post, current_session_history, seq, session_plan, nextEvent, intervention_time)
+      context = getContextForAssert session_plan, seq, current_session_history, nextEvent, intervention_time
       assert_equal(CometHuntersVolcroweExperiment1::getExperimentName,data["message"]["experiment_name"],"Wrong experiment name.")
       assert_equal(CometHuntersVolcroweExperiment1::getStatementsCohort,data["message"]["cohort"],"Wrong cohort.")
       assert_equal(@@TEST_STATEMENTS_USER_ID,data["message"]["user_id"],"Wrong user ID.")
       assert(data["message"]["active"]==true,"Expected participant to be active.")
       assert(data["message"]["excluded"]==false,"Expected participant not to be excluded.")
       assert_nil(data["message"]["excluded_reason"],"Expected no exclusion reason")
-      assert_equal(interventions_available_count,data["message"]["interventions_available"].length,"#{getSessionSoFar(current_session_history)}Expected #{interventions_available_count} available interventions.")
-      assert(!data["message"]["interventions_available"].include?(intervention_to_post),"#{getSessionSoFar(current_session_history)}Expected that intervention no longer to be marked available.")
+      assert_equal(interventions_available_count,data["message"]["interventions_available"].length,"#{context}Expected #{interventions_available_count} available interventions.")
+      assert(!data["message"]["interventions_available"].include?(intervention_to_post),"#{context}Expected that intervention no longer to be marked available.")
       assert_equal(interventions_seen_count,data["message"]["interventions_seen"].length,"Expected #{interventions_seen_count} seen interventions.")
-      assert_equal(intervention_to_post,data["message"]["interventions_seen"][0],"#{getSessionSoFar(current_session_history)}Expected that intervention marked seen.")
-      assert_equal(Hash.new, data["message"]["original_session_plans"],"#{getSessionSoFar(current_session_history)}Expected no original session plans.")
-      assert_equal(Hash.new, data["message"]["session_histories"],"#{getSessionSoFar(current_session_history)}Expected no session histories.")
-      assert_equal(@@FIRST_SESSION_ID,data["message"]["current_session_id"], "#{getSessionSoFar(current_session_history)}Expected session ID not to change.")
-      assert_equal(current_session_history,data["message"]["current_session_history"],"#{getSessionSoFar(current_session_history)}Expected current session history to be updated.")
-      assert_equal(session_plan,data["message"]["current_session_plan"],"#{getSessionSoFar(current_session_history)}Expected session plan not to change.")
-      assert_equal(seq,data["message"]["seq_of_next_event"],"#{getSessionSoFar(current_session_history)}Expected session plan pointer to advance.")
-      assert_equal(false,data["message"]["intervention_time"],"#{getSessionSoFar(current_session_history)}Expected to be told that an intervention is not due next.")
-      assert_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"#{getSessionSoFar(current_session_history)}Expected to be told that the next event is an intervention.")
-      assert_equal(@@CLASSIFICATION_MARKER,session_plan[seq],"#{getSessionSoFar(current_session_history)}Expected the next event in the session plan to be an intervention.")
-      assert_equal(session_plan[seq],data["message"]["next_event"],"#{getSessionSoFar(current_session_history)}Expected next event in session plan to also be in next_event.")
+      assert_equal(intervention_to_post,data["message"]["interventions_seen"][0],"#{context}Expected that intervention marked seen.")
+      assert_equal(Hash.new, data["message"]["original_session_plans"],"#{context}Expected no original session plans.")
+      assert_equal(Hash.new, data["message"]["session_histories"],"#{context}Expected no session histories.")
+      assert_equal(@@FIRST_SESSION_ID,data["message"]["current_session_id"], "#{context}Expected session ID not to change.")
+      assert_equal(current_session_history,data["message"]["current_session_history"],"#{context}Expected current session history to be updated.")
+      assert_equal(session_plan,data["message"]["current_session_plan"],"#{context}Expected session plan not to change.")
+      assert_equal(seq,data["message"]["seq_of_next_event"],"#{context}Expected session plan pointer to advance.")
+      assert_equal(false,data["message"]["intervention_time"],"#{context}Expected to be told that an intervention is not due next.")
+      assert_equal(@@CLASSIFICATION_MARKER,data["message"]["next_event"],"#{context}Expected to be told that the next event is an intervention.")
+      assert_equal(@@CLASSIFICATION_MARKER,session_plan[seq],"#{context}Expected the next event in the session plan to be an intervention.")
+      assert_equal(session_plan[seq],data["message"]["next_event"],"#{context}Expected next event in session plan to also be in next_event.")
     end
 
-    def getSessionSoFar(current_session_history)
+    def getContextForAssert(session_plan, seq, current_session_history, nextEvent, intervention_time)
       return "\nAfter session so far of:\n#{current_session_history}\n"
     end
 
@@ -175,16 +178,19 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       current_session_history.push "intervention:#{intervention_to_post}"
       interventions_seen_count = data["message"]["interventions_seen"].length
       interventions_available_count = data["message"]["interventions_available"].length
+      intervention_time = data["message"]["intervention_time"]
       seq += 1
-      return seq, interventions_available_count, interventions_seen_count
+      return seq, interventions_available_count, interventions_seen_count, intervention_time
     end
 
-    def advanceByClassification(data, seq, session_plan, nextEvent, current_session_history, classification_id_index)
+    def advanceByClassification(data, seq, session_plan, nextEvent, current_session_history, classification_id_index, intervention_time)
+      intervention_time = data["message"]["intervention_time"]
+      context = getContextForAssert session_plan, seq, current_session_history, nextEvent, intervention_time
       if current_session_history.nil?
         current_session_history = []
       end
       current_session_history.push "classification:#{@@CLASSIFICATION_IDS[classification_id_index]}"
-      assert_equal(current_session_history,data["message"]["current_session_history"],"#{getSessionSoFar(current_session_history)}Expected current session history to be updated.")
+      assert_equal(current_session_history,data["message"]["current_session_history"],"#{context}Expected current session history to be updated.")
       if seq.nil?
         session_plan = data["message"]["current_session_plan"]
         seq = data["message"]["seq_of_next_event"]
@@ -195,7 +201,7 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       classification_id_index += 1
       interventions_seen_count = data["message"]["interventions_seen"].length
       interventions_available_count = data["message"]["interventions_available"].length
-      return seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count
+      return seq, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count, intervention_time
     end
 ##
 
