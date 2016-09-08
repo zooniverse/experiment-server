@@ -136,11 +136,12 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
     end
 
     def postClassification(user_id, classification_id_index)
-      uri = URI.parse("#{@@SERVER_URL}/experiment/CometHuntersVolcroweExperiment1/user/#{user_id}/session/#{@@FIRST_SESSION_ID}/classification/#{@@CLASSIFICATION_IDS[classification_id_index]}")
+      url = "#{@@SERVER_URL}/experiment/CometHuntersVolcroweExperiment1/user/#{user_id}/session/#{@@FIRST_SESSION_ID}/classification/#{@@CLASSIFICATION_IDS[classification_id_index]}"
+      uri = URI.parse(url)
       http = Net::HTTP.new(uri.host, uri.port)
       request = Net::HTTP::Post.new(uri.request_uri)
       response = http.request(request)
-      assert_equal("200",response.code)
+      assert_equal("200",response.code, "Expected POST of classification to succeed. Tried to post to #{url}. Message from server: #{response.code} - #{response.message} Response body:\n #{response.body}")
       JSON.parse(response.body)
     end
 
@@ -153,11 +154,12 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
     end
 
     def postIntervention(intervention_to_post, current_session_history, user_id)
-      uri = URI.parse("#{@@SERVER_URL}/experiment/CometHuntersVolcroweExperiment1/user/#{user_id}/session/#{@@FIRST_SESSION_ID}/intervention/#{intervention_to_post}")
+      url = "#{@@SERVER_URL}/experiment/CometHuntersVolcroweExperiment1/user/#{user_id}/session/#{@@FIRST_SESSION_ID}/intervention/#{intervention_to_post}"
+      uri = URI.parse(url)
       http = Net::HTTP.new(uri.host, uri.port)
       request = Net::HTTP::Post.new(uri.request_uri)
       response = http.request(request)
-      assert_equal("200",response.code)
+      assert_equal("200",response.code, "Expected POST of intervention #{intervention_to_post} to succeed. Tried to post to #{url}. Message from server: #{response.code} - #{response.message}. Response body:\n #{response.body}")
       JSON.parse(response.body)
     end
 
