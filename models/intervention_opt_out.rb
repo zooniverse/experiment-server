@@ -6,7 +6,7 @@ class InterventionOptOut
   field :project, type: String
   field :opted_out, type: Boolean, default: false
 
-  validates_inclusion_of :project, in: [ "galaxy_zoo" ], message: "Not a recognized project name. Supported project names are: galaxy_zoo"
+  validates_inclusion_of :project, in: [ "galaxy_zoo", "mschwamb/comet-hunters" ], message: "Not a recognized project name. Supported project names are: galaxy_zoo, mschwamb/comet-hunters"
   validates_presence_of :experiment_name, message: "Experiment name must be specified"
 
   def as_json(args)
