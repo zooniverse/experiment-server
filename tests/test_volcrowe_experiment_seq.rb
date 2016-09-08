@@ -136,6 +136,7 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
     end
 
     def postClassification(user_id, classification_id_index)
+      assert(!@@CLASSIFICATION_IDS[classification_id_index].nil?, "Expected to find a classification ID with index #{classification_id_index} for use in testing.")
       url = "#{@@SERVER_URL}/experiment/CometHuntersVolcroweExperiment1/user/#{user_id}/session/#{@@FIRST_SESSION_ID}/classification/#{@@CLASSIFICATION_IDS[classification_id_index]}"
       uri = URI.parse(url)
       http = Net::HTTP.new(uri.host, uri.port)
