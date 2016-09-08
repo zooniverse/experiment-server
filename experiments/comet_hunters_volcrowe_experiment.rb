@@ -259,17 +259,21 @@ module PlanOut
             CometHuntersVolcroweExperiment1::startOrRestartSession(participant, session_id)
           end
         end
-      end
-      if participant.cohort != @@COHORT_QUESTIONS and participant.cohort != @@COHORT_STATEMENTS
-        participant.next_event = @@CLASSIFICATION_MARKER
-      else
+
         participant.next_event = participant.current_session_plan[participant.seq_of_next_event]
+        participant.intervention_time = (participant.next_event != @@CLASSIFICATION_MARKER)
+      else
+        participant.next_event = @@CLASSIFICATION_MARKER
+        participant.intervention_time = false
       end
-      participant.intervention_time = (participant.next_event != @@CLASSIFICATION_MARKER)
+
+      # check for end of experiment (ie completion of last intervention)
       if (participant.cohort == @@COHORT_QUESTIONS or participant.cohort == @@COHORT_STATEMENTS) and participant.seq_of_next_event >= participant.current_session_plan.length
         # session plan complete
-        participant.active = false
-        # TODO: do we need to do more here? e.g. check all used? archive the session?
+        participant.active = true # for this experiment, we're keeping partipants active after completing the session plan.
+                                  # Change this line (and tests) if that is not what is wanted.
+        participant.next_event = nil
+        participant.intervention_time = false
       end
     end
 
