@@ -27,28 +27,75 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       end
     end
 
+    def handleClassificationWithChecks(data, step, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count)
+      preCheckClassification data, step, session_plan, seq
+      data = postClassification classification_id_index
+      seq, step, classification_id_index, session_plan, nextEvent, current_session_history = advanceByClassification data, step, seq, session_plan, nextEvent, current_session_history, classification_id_index
+      postCheckClassification seq, data, step, session_plan, classification_id_index
+      return data, seq, step, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count
+    end
+
+    def handleInterventionWithChecks(data, step, session_plan, seq, current_session_history, interventions_available_count, interventions_seen_count)
+      preCheckIntervention data, step, session_plan, seq
+      intervention_to_post = session_plan[seq]
+      data = postIntervention intervention_to_post, current_session_history
+      seq, interventions_available_count, interventions_seen_count = advanceByIntervention data, seq, current_session_history, intervention_to_post, interventions_available_count, interventions_seen_count
+      postCheckIntervention data, interventions_available_count, interventions_seen_count, step, intervention_to_post, current_session_history, seq, session_plan
+      return data, seq, interventions_available_count, interventions_seen_count
+    end
+
     def testUpToFirstInterventionForANewStatementsUser
       classification_id_index = 0
+      interventions_available_count = 15
+      interventions_seen_count = 0
       begin
         data = postClassification classification_id_index
         seq, step, classification_id_index, session_plan, nextEvent, current_session_history = advanceByClassification data, step, seq, session_plan, nextEvent, current_session_history, classification_id_index
         while nextEvent==@@CLASSIFICATION_MARKER
-          preCheckClassification data, step, session_plan, seq
-          data = postClassification classification_id_index
-          seq, step, classification_id_index, session_plan, nextEvent, current_session_history = advanceByClassification data, step, seq, session_plan, nextEvent, current_session_history, classification_id_index
-          postCheckClassification seq, data, step, session_plan, classification_id_index
+          data, seq, step, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count = handleClassificationWithChecks data, step, session_plan, seq, classification_id_index, nextEvent, current_session_history, interventions_available_count, interventions_seen_count
         end
-        preCheckIntervention data, step, session_plan, seq
-        intervention_to_post = session_plan[seq]
-        data = postIntervention intervention_to_post, current_session_history
-        seq = advanceByIntervention seq, current_session_history, intervention_to_post
-        postCheckIntervention data, 14, 1, step, intervention_to_post, current_session_history, seq, session_plan
 
+        data, seq, interventions_available_count, interventions_seen_count = handleInterventionWithChecks data, step, session_plan, seq, current_session_history, interventions_available_count, interventions_seen_count
         # TODO now one more classification
       ensure
         deleteUser(@@TEST_STATEMENTS_USER_ID)
       end
     end
+
+#    def testAFullSessionForANewStatementsUser
+#      classification_id_index = 0
+#      begin
+#        data = postClassification classification_id_index
+#        seq, step, classification_id_index, session_plan, nextEvent, current_session_history = advanceByClassification data, step, seq, session_plan, nextEvent, current_session_history, classification_id_index
+#        interventions_available_count = data["message"]["interventions_available"].length
+#        interventions_seen_count = data["message"]["interventions_available"].length
+#        assertEqual(15,interventions_available_count,"Expected 15 available interventions")
+#        assertEqual(0,interventions_seen_count,"Expected 15 available interventions")
+#
+#        while seq < session_plan.length
+#          if session_plan
+#
+#        end
+#
+#        while nextEvent==@@CLASSIFICATION_MARKER
+#          preCheckClassification data, step, session_plan, seq
+#          data = postClassification classification_id_index
+#          seq, step, classification_id_index, session_plan, nextEvent, current_session_history = advanceByClassification data, step, seq, session_plan, nextEvent, current_session_history, classification_id_index
+#          postCheckClassification seq, data, step, session_plan, classification_id_index
+#        end
+#        preCheckIntervention data, step, session_plan, seq
+#        intervention_to_post = session_plan[seq]
+#        data = postIntervention intervention_to_post, current_session_history
+#        seq = advanceByIntervention seq, current_session_history, intervention_to_post
+#        postCheckIntervention data, 14, 1, step, intervention_to_post, current_session_history, seq, session_plan
+#
+#        # TODO now one more classification
+#      ensure
+#        deleteUser(@@TEST_STATEMENTS_USER_ID)
+#      end
+#    end
+#
+
 
 ## Helper methods
 
@@ -97,16 +144,16 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       JSON.parse(response.body)
     end
 
-    def postCheckIntervention(data, interventions_left_after_this, interventions_used_after_this, step, intervention_to_post, current_session_history, seq, session_plan)
+    def postCheckIntervention(data, interventions_available_count, interventions_seen_count, step, intervention_to_post, current_session_history, seq, session_plan)
       assert_equal(CometHuntersVolcroweExperiment1::getExperimentName,data["message"]["experiment_name"],"Wrong experiment name.")
       assert_equal(CometHuntersVolcroweExperiment1::getStatementsCohort,data["message"]["cohort"],"Wrong cohort.")
       assert_equal(@@TEST_STATEMENTS_USER_ID,data["message"]["user_id"],"Wrong user ID.")
       assert(data["message"]["active"]==true,"Expected participant to be active.")
       assert(data["message"]["excluded"]==false,"Expected participant not to be excluded.")
       assert_nil(data["message"]["excluded_reason"],"Expected no exclusion reason")
-      assert_equal(interventions_left_after_this,data["message"]["interventions_available"].length,"Expected #{interventions_left_after_this} available interventions.")
+      assert_equal(interventions_available_count,data["message"]["interventions_available"].length,"Expected #{interventions_available_count} available interventions.")
       assert(!data["message"]["interventions_available"].include?(intervention_to_post),"After #{step} classifications and the #{intervention_to_post} intervention, expected that intervention no longer to be marked available.")
-      assert_equal(interventions_used_after_this,data["message"]["interventions_seen"].length,"Expected #{interventions_used_after_this} seen interventions.")
+      assert_equal(interventions_seen_count,data["message"]["interventions_seen"].length,"Expected #{interventions_seen_count} seen interventions.")
       assert_equal(intervention_to_post,data["message"]["interventions_seen"][0],"After #{step} classifications and the #{intervention_to_post} intervention, expected that intervention marked seen.")
       assert_equal(Hash.new, data["message"]["original_session_plans"],"After #{step} classifications and the #{intervention_to_post} intervention, expected no original session plans.")
       assert_equal(Hash.new, data["message"]["session_histories"],"After #{step} classifications and the #{intervention_to_post} intervention, expected no session histories.")
@@ -120,9 +167,12 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       assert_equal(session_plan[seq],data["message"]["next_event"],"After #{step} classifications and the #{intervention_to_post} intervention, expected next event in session plan to also be in next_event.")
     end
 
-    def advanceByIntervention(seq, current_session_history, intervention_to_post)
+    def advanceByIntervention(data, seq, current_session_history, intervention_to_post, interventions_available_count, interventions_seen_count)
       current_session_history.push "intervention:#{intervention_to_post}"
-      seq + 1
+      interventions_seen_count = data["message"]["interventions_seen"].length
+      interventions_available_count = data["message"]["interventions_available"].length
+      seq += 1
+      return seq, interventions_available_count, interventions_seen_count
     end
 
     def advanceByClassification(data, step, seq, session_plan, nextEvent, current_session_history, classification_id_index)
@@ -144,7 +194,9 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
         step += 1
       end
       classification_id_index += 1
-      return seq, step, classification_id_index, session_plan, nextEvent, current_session_history
+      interventions_seen_count = data["message"]["interventions_seen"].length
+      interventions_available_count = data["message"]["interventions_available"].length
+      return seq, step, classification_id_index, session_plan, nextEvent, current_session_history, interventions_available_count, interventions_seen_count
     end
 ##
 
