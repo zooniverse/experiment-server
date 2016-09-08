@@ -24,7 +24,7 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
 
     def setup
       @@CLASSIFICATION_IDS = []
-      100.times do |i|
+      1000.times do |i|
         @@CLASSIFICATION_IDS.push (i+101)
       end
     end
