@@ -1,6 +1,10 @@
 # Note: These are not really unit tests - in fact they are external tests.
 # They assume you have already started a server with `ruby server.rb -o 0.0.0.0`
 
+# Troubleshooting: if you get:
+# "Moped::Errors::ConnectionFailure - Could not connect to a primary node for replica set"
+# then please ensure your MongoDB database is initialised correctly and switched on.
+
 require "test/unit"
 require 'net/http'
 require 'uri'
