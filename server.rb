@@ -113,6 +113,31 @@ def check_opt_out_settings(user_id,experiment_name,project,set_opted_out = false
   return bundle
 end
 
+# This wouldn't normally be something made available via a UI, but is useful for experiment administrators and testing
+#
+def cancel_opt_out(user_id,experiment_name,project)
+  bundle = { :found => false, :created => false, :updated => false, :errors => nil, :status => 200, :data => nil }
+  bundle[:found] = InterventionOptOut.find_by(:user_id => user_id, :experiment_name => experiment_name, :project => project)
+  if bundle[:found]
+    intervention_opt_out = bundle[:found]
+    bundle[:found] = true
+    bundle[:data] = intervention_opt_out.attributes
+    if intervention_opt_out["opted_out"]
+      if intervention_opt_out.cancelOptOut! and intervention_opt_out.save
+        bundle[:status] = 200
+        bundle[:updated] = true
+        bundle[:data] = intervention_opt_out.attributes
+      else
+        bundle[:status] = 500
+      end
+    else
+      bundle[:status] = 400
+      bundle[:errors] = intervention_opt_out.errors
+    end
+  end
+  return bundle
+end
+
 def clean_opt_out_results(opt_out_results)
   opt_out_results.delete(:status)
   opt_out_results.delete(:data) if opt_out_results[:data].nil?
@@ -322,6 +347,19 @@ post '/users/:user_id/optout' do
     "Access-Control-Allow-Origin"   => "*",
     "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
   opt_out_results = check_opt_out_settings(params[:user_id],params[:experiment_name],params[:project],true)
+  status opt_out_results[:status]
+  clean_opt_out_results(opt_out_results)
+  opt_out_results.to_json
+end
+
+# cancel a participant's opted out status - params must contain project and experiment name
+# strictly speaking this shouldn't be a DELETE as the record remains, but is just flagged opted_out = false - but this is kept for ease of use
+delete '/users/:user_id/optout' do
+  content_type :json
+  headers \
+    "Access-Control-Allow-Origin"   => "*",
+    "Access-Control-Expose-Headers" => "Access-Control-Allow-Origin"
+  opt_out_results = cancel_opt_out(params[:user_id],params[:experiment_name],params[:project])
   status opt_out_results[:status]
   clean_opt_out_results(opt_out_results)
   opt_out_results.to_json

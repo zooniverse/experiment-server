@@ -207,6 +207,12 @@ module PlanOut
       return []
     end
 
+    def self.backupThisSessionPlan(participant)
+      if !participant.current_session_id.nil? and !participant.current_session_plan.nil? and !participant.original_session_plans.key?(participant.current_session_id)
+        participant.original_session_plans[participant.current_session_id] = participant.current_session_plan
+      end
+    end
+
     # start a new session (or restart the session)
     def self.startOrRestartSession(participant, session_id)
       # archive the session history for the previous session
@@ -215,9 +221,7 @@ module PlanOut
       end
 
       # back up first non-nil session plan for each session_id
-      if !participant.current_session_id.nil? and !participant.current_session_plan.nil? and !participant.original_session_plans.key?(participant.current_session_id)
-        participant.original_session_plans[participant.current_session_id] = participant.current_session_plan
-      end
+      backupThisSessionPlan(participant)
 
       # if not a restart, clear the current session log and mark that we are now in the new session
       if participant.current_session_id != session_id
@@ -229,6 +233,22 @@ module PlanOut
       participant.current_session_plan = CometHuntersVolcroweExperiment1::generateSessionPlan(participant.cohort, participant.interventions_available)
       if participant.current_session_plan.length > 0
         participant.seq_of_next_event = 0
+      end
+    end
+
+    def self.excludeUserIfOptedOut(participant, session_id)
+      opt_out_record = InterventionOptOut.where( experiment_name:participant["experiment_name"] , user_id:participant["user_id"], project:participant["project_slug"] ).first
+      if not opt_out_record.nil? and opt_out_record["opted_out"]
+        participant.excluded = true
+        participant.excluded_reason = "Participant has opted out of the experiment"
+        participant.active = false
+        participant.interventions_available = []
+        participant.seq_of_next_event = -1
+        startOrRestartSession participant, session_id
+        participant.save
+        true
+      else
+        false
       end
     end
 
@@ -302,26 +322,38 @@ module PlanOut
     def self.endClassification(user_id, session_id, classification_id)
       # ensure the user is registered
       participant = CometHuntersVolcroweExperiment1::getParticipant(user_id)
+      opted_out = excludeUserIfOptedOut participant, session_id
       CometHuntersVolcroweExperiment1::verifySession(participant, session_id)
       participant.current_session_history.push "classification:#{classification_id}"
-      CometHuntersVolcroweExperiment1::advanceIfNextEventSatisfied(@@CLASSIFICATION_MARKER, participant, session_id)
-      sugar_response = CometHuntersVolcroweExperiment1::postLatestToSugar(participant,session_id) # returns json
-      participant.save!
-      sugar_response
+      if not opted_out
+        CometHuntersVolcroweExperiment1::advanceIfNextEventSatisfied(@@CLASSIFICATION_MARKER, participant, session_id)
+        sugar_response = CometHuntersVolcroweExperiment1::postLatestToSugar(participant,session_id) # returns json
+        participant.save!
+        sugar_response
+      else
+        participant.save!
+        [422, participant.to_json] # couldn't advance the experiment as the user is opted out
+      end
     end
 
     # upon notification that an intervention has ended, update participant and post latest data to Sugar
     def self.endIntervention(user_id, session_id, intervention_id)
       # ensure the user is registered
       participant = CometHuntersVolcroweExperiment1::getParticipant(user_id)
+      opted_out = excludeUserIfOptedOut participant, session_id
       participant.interventions_available.delete intervention_id
       participant.interventions_seen.push intervention_id
       CometHuntersVolcroweExperiment1::verifySession(participant, session_id)
       participant.current_session_history.push "intervention:#{intervention_id}"
-      CometHuntersVolcroweExperiment1::advanceIfNextEventSatisfied(intervention_id, participant, session_id)
-      sugar_response = CometHuntersVolcroweExperiment1::postLatestToSugar(participant,session_id) # returns json
-      participant.save!
-      sugar_response
+      if not opted_out
+        CometHuntersVolcroweExperiment1::advanceIfNextEventSatisfied(intervention_id, participant, session_id)
+        sugar_response = CometHuntersVolcroweExperiment1::postLatestToSugar(participant,session_id) # returns json
+        participant.save!
+        sugar_response
+      else
+        participant.save!
+        [422, participant.to_json] # couldn't advance the experiment as the user is opted out
+      end
     end
 
     #def assign(params, **inputs)

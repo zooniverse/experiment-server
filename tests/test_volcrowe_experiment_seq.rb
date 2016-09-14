@@ -142,7 +142,7 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       http = Net::HTTP.new(uri.host, uri.port)
       request = Net::HTTP::Post.new(uri.request_uri)
       response = http.request(request)
-      assert_equal("200",response.code, "Expected POST of classification to succeed. Tried to post to #{url}. Message from server: #{response.code} - #{response.message} Response body:\n #{response.body}")
+      assert_equal("200",response.code, "Expected POST of classification to succeed. Tried to post to #{url}. Message from server: #{response.code} - #{response.message} Response body:\n #{response.body[0..500]}...")
       JSON.parse(response.body)
     end
 
@@ -160,7 +160,7 @@ class TestVolcroweExperimentSeq < Test::Unit::TestCase
       http = Net::HTTP.new(uri.host, uri.port)
       request = Net::HTTP::Post.new(uri.request_uri)
       response = http.request(request)
-      assert_equal("200",response.code, "Expected POST of intervention #{intervention_to_post} to succeed. Tried to post to #{url}. Message from server: #{response.code} - #{response.message}. Response body:\n #{response.body}")
+      assert_equal("200",response.code, "Expected POST of intervention #{intervention_to_post} to succeed. Tried to post to #{url}. Message from server: #{response.code} - #{response.message}. Response body:\n #{response.body[0..500]}...")
       JSON.parse(response.body)
     end
 
