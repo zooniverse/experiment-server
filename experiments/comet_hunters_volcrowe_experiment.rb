@@ -17,7 +17,7 @@ module PlanOut
     @@COHORT_STATEMENTS = "statements"
     @@COHORT_INELIGIBLE = "(ineligible)"
     @@ANONYMOUS = "(anonymous)"
-    @@PROJECT_SLUG_PRODUCTION = "mschwamb/hsc-comet-hunters-prototype"
+    @@PROJECT_SLUG_PRODUCTION = "mschwamb/comet-hunters"
     @@PROJECT_SLUG_DEVELOPMENT = "mschwamb/planet-four-terrains"
     @@EXPERIMENT_NAME = "CometHuntersVolcroweExperiment1"
     @@CLASSIFICATION_MARKER = "classification"
